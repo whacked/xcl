@@ -15,5 +15,8 @@ stdenv.mkDerivation rec {
         if ! (command -v shadow-cljs &>/dev/null); then
             npm install
         fi
+
+        alias we-m="watchexec --restart --no-ignore --watch build/ node build/macchiato-server.js"
     '';
 }
+
