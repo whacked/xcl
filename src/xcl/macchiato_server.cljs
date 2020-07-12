@@ -18,6 +18,7 @@
    ["yaml" :as yaml]
    [xcl.database :as db]
    [cljs.reader]
+   [promesa.core :as promesa]
    ))
 
 (def $working-dir (.cwd js/process))
@@ -67,6 +68,13 @@
     (plain-text (.readFileSync fs file-path "utf-8"))
     {:status 404
      :body (str "not found: " file-path)}))
+
+(defn make-json-response [data]
+  (-> data
+      (clj->js)
+      (js/JSON.stringify)
+      (plain-text)
+      (assoc-in [:headers :content-type] "application/json")))
 
 (declare $routes)
 (defn routes-to-help [& _]
@@ -147,37 +155,61 @@
                              (respond)))}]]
 
    ["/crud"
-    {:get {:handler (fn [request respond _]
-                      (->
-                       [:html
-                        [:head
-                         [:meta
-                          {:content "text/html;charset=utf-8"
-                           :http-equiv "Content-Type"}]
-                         [:meta
-                          {:content "utf-8"
-                           :http-equiv "encoding"}]
-                         [:style
-                          "* { margin: 0; padding: 0; }"]
-                         (->> ["tabulator-tables/dist/css/tabulator.min.css"
-                               "react-tabulator/lib/styles.css"
-                               "react-tabs/style/react-tabs.css"]
-                              (map (fn [css-path]
-                                     [:link
-                                      {:rel "stylesheet"
-                                       :href (str "/" $css-loader-endpoint "/" css-path)}])))]
-                        [:body
-                         [:div {:id "main"}]
-                         [:script
-                          {:type "text/javascript"
-                           :src (str "/" $js-loader-endpoint
-                                     "/" (name $crud-frontend-main-module) ".js")}]]]
-                       (h/html5)
-                       (plain-text)
-                       (assoc-in [:headers :content-type]
-                                 "text/html")
-                       (respond)))}}]
-   ])
+    [""
+     {:get {:handler (fn [request respond _]
+                       (->
+                        [:html
+                         [:head
+                          [:meta
+                           {:content "text/html;charset=utf-8"
+                            :http-equiv "Content-Type"}]
+                          [:meta
+                           {:content "utf-8"
+                            :http-equiv "encoding"}]
+                          [:style
+                           "* { margin: 0; padding: 0; }"]
+                          (->> ["tabulator-tables/dist/css/tabulator.min.css"
+                                "react-tabulator/lib/styles.css"
+                                "react-tabs/style/react-tabs.css"]
+                               (map (fn [css-path]
+                                      [:link
+                                       {:rel "stylesheet"
+                                        :href (str "/" $css-loader-endpoint "/" css-path)}])))]
+                         [:body
+                          [:div {:id "main"}]
+                          [:script
+                           {:type "text/javascript"
+                            :src (str "/" $js-loader-endpoint
+                                      "/" (name $crud-frontend-main-module) ".js")}]]]
+                        (h/html5)
+                        (plain-text)
+                        (assoc-in [:headers :content-type]
+                                  "text/html")
+                        (respond)))}}]
+
+    ["/:model"
+     {:response-format :json
+      :get {:handler (fn [request respond _]
+                       (let [model-name (get-in request [:path-params :model])]
+                         (cond (not (db/has-table? model-name))
+                               (respond {:status 404
+                                         :body (str "not such model: " model-name)})
+
+                               (= model-name "content")
+                               (db/load-content
+                                (fn [results]
+                                  (-> results
+                                      (make-json-response)
+                                      (respond))))
+
+                               :else
+                               (db/find-by-attribute-all
+                                model-name
+                                true
+                                (fn [results]
+                                  (-> results
+                                      (make-json-response)
+                                      (respond)))))))}}]]])
 
 (defn wrap-body-to-params
   [handler]
@@ -219,6 +251,26 @@
 
 (defn -main []
   (db/initialize-database!
-   db/$default-settings)
-
+   db/$default-settings
+   (fn [builder]
+     (let [tables
+           ;; specify order explicitly to avoid contention from table dependency
+           ["symbol" "text"
+            "property"
+            "content"
+            "content__property"]
+           
+           iter-create-seed-data!
+           (fn iter-create-seed-data! [remain]
+             (when (seq remain)
+               (let [table-name (first remain)
+                     seed-data (db/seed-data table-name)
+                     insert-query
+                     (db/generate-insert-query
+                      builder table-name seed-data)]
+                 (promesa/do!
+                  (db/run-sql! builder insert-query)
+                  (iter-create-seed-data! (rest remain))))))]
+       (iter-create-seed-data! tables))))
+  
   (server))
