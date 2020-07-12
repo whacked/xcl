@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "chalk": "^4.1.0",
     "cookies": "^0.8.0",
     "cors": "^2.8.5",
     "create-react-class": "^15.6.3",
