@@ -125,25 +125,9 @@
      {:get {:handler (fn [request respond _]
                        (-> (or (when-let [target-file-name
                                           (get-in request [:path-params :.css])]
-                                 (cond (= "style.css" target-file-name)
-                                       (let [css-path
-                                             (as-> "react-tabulator" $
-                                               (.resolve js/require $)
-                                               (.dirname path $)
-                                               (.join path $ target-file-name))]
-                                         (plain-file css-path))
-
-                                       (= "tabulator.min.css" target-file-name)
-                                       (let [css-path
-                                             (as-> "tabulator-tables" $
-                                               (.resolve js/require $)
-                                               (.dirname path $)
-                                               (.dirname path $)
-                                               (.join path $ "css")
-                                               (.join path $ target-file-name))]
-                                         (plain-file css-path))
-                                       
-                                       :else nil))
+                                 (let [css-path
+                                       (.join path "node_modules" target-file-name)]
+                                   (plain-file css-path)))
                                {:status 400
                                 :body (str "bad request")})
                            (respond)))}}]]
@@ -175,12 +159,13 @@
                            :http-equiv "encoding"}]
                          [:style
                           "* { margin: 0; padding: 0; }"]
-                         [:link
-                          {:rel "stylesheet"
-                           :href (str "/" $css-loader-endpoint "/tabulator.min.css")}]
-                         [:link
-                          {:rel "stylesheet"
-                           :href (str "/" $css-loader-endpoint "/styles.css")}]]
+                         (->> ["tabulator-tables/dist/css/tabulator.min.css"
+                               "react-tabulator/lib/styles.css"
+                               "react-tabs/style/react-tabs.css"]
+                              (map (fn [css-path]
+                                     [:link
+                                      {:rel "stylesheet"
+                                       :href (str "/" $css-loader-endpoint "/" css-path)}])))]
                         [:body
                          [:div {:id "main"}]
                          [:script
