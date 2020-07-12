@@ -2,36 +2,42 @@
   (:require
    [goog.dom :as gdom]
    [reagent.dom :as r]
+   [xcl.data-model :as model]
+   [malli.generator :as mg]
    ["tabulator-tables" :as Tabulator]
-   ["react-tabulator" :refer [ReactTabulator]]))
-
-(def columns
-  [
-   { :title "Name" :field "name" :width 150 }
-   { :title "Age" :field "age" :hozAlign "left" :formatter "progress" }
-   { :title "Favourite Color" :field "col" }
-   { :title "Date Of Birth" :field "dob" :hozAlign "center" }
-   { :title "Rating" :field "rating" :hozAlign "center" :formatter "star" }
-   { :title "Passed?" :field "passed" :hozAlign "center" :formatter "tickCross" }
-   ]
-  )
-(def data
-  [
-   {:id 1 :name "Oli Bob" :age"12" :col"red" :dob""}
-   {:id 2 :name "Mary May" :age"1" :col"blue" :dob"14/05/1982"}
-   {:id 3 :name "Christine Lobowski" :age"42" :col"green" :dob"22/05/1982"}
-   {:id 4 :name "Brendon Philips" :age"125" :col"orange" :dob"01/08/1980"}
-   {:id 5 :name "Margret Marmajuke" :age"16" :col"yellow" :dob"31/01/1999"}
-   ])
+   ["react-tabulator" :refer [ReactTabulator]]
+   ["react-tabs" :refer [Tab Tabs TabList TabPanel]]))
 
 (defn setup-ui! []
   (r/render
    [(fn []
-      [:div "hello reagent"]
-    
-      [:> ReactTabulator
-       {:data (clj->js data)
-        :columns (clj->js columns)}
+      [:div
+       [:> Tabs
+        [:> TabList
+         (->> model/table-model-mapping
+              (map (fn [[table-name _]]
+                     [:> Tab table-name])))]
+
+        (->> model/table-model-mapping
+             (map (fn [[table-name model-def]]
+                    (let [data (take 20 (repeatedly (fn [] (mg/generate model-def))))
+                          columns (->> (rest model-def)
+                                       (map (fn [[key validator]]
+                                              (let [field-name
+                                                    (if (fn? validator)
+                                                      (name key)
+                                                      ;; foreign key
+                                                      (str (name key) "Id"))]
+                                                (merge
+                                                 {:title field-name
+                                                  :field field-name}
+                                                 (if (= :id key)
+                                                   nil
+                                                   {:editor "input"}))))))]
+                      [:> TabPanel
+                       [:> ReactTabulator
+                        {:data data
+                         :columns columns}]]))))]
        ]
       )]
    (gdom/getElement "main")))
