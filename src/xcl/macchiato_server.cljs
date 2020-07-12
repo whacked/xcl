@@ -62,6 +62,12 @@
   {:status 200
    :body body})
 
+(defn plain-file [file-path]
+  (if (.existsSync fs file-path)
+    (plain-text (.readFileSync fs file-path "utf-8"))
+    {:status 404
+     :body (str "not found: " file-path)}))
+
 (declare $routes)
 (defn routes-to-help [& _]
   (->> (derive-all-routes $routes)
@@ -119,17 +125,25 @@
      {:get {:handler (fn [request respond _]
                        (-> (or (when-let [target-file-name
                                           (get-in request [:path-params :.css])]
-                                 (let [css-path
-                                       (as-> "tabulator-tables" $
-                                         (.resolve js/require $)
-                                         (.dirname path $)
-                                         (.dirname path $)
-                                         (.join path $ "css")
-                                         (.join path $ target-file-name))]
-                                   (if (.existsSync fs css-path)
-                                     (plain-text (.readFileSync fs css-path "utf-8"))
-                                     {:status 404
-                                      :body (str "not found: " target-file-name)})))
+                                 (cond (= "style.css" target-file-name)
+                                       (let [css-path
+                                             (as-> "react-tabulator" $
+                                               (.resolve js/require $)
+                                               (.dirname path $)
+                                               (.join path $ target-file-name))]
+                                         (plain-file css-path))
+
+                                       (= "tabulator.min.css" target-file-name)
+                                       (let [css-path
+                                             (as-> "tabulator-tables" $
+                                               (.resolve js/require $)
+                                               (.dirname path $)
+                                               (.dirname path $)
+                                               (.join path $ "css")
+                                               (.join path $ target-file-name))]
+                                         (plain-file css-path))
+                                       
+                                       :else nil))
                                {:status 400
                                 :body (str "bad request")})
                            (respond)))}}]]
@@ -142,15 +156,11 @@
                                                         $working-dir
                                                         $js-loader-endpoint
                                                         target-file-name)]
-                                     (if (.existsSync fs js-path)
-                                       (plain-text (.readFileSync fs js-path "utf-8"))
-                                       {:status 404
-                                        :body (str "not fonud: " target-file-name)})))
+                                     (plain-file js-path)))
                                  {:status 400
                                   :body (str "bad request")})
                              (assoc-in [:headers :content-type] "application/javascript")
-                             (respond))
-                         )}]]
+                             (respond)))}]]
 
    ["/crud"
     {:get {:handler (fn [request respond _]
@@ -163,9 +173,14 @@
                          [:meta
                           {:content "utf-8"
                            :http-equiv "encoding"}]
+                         [:style
+                          "* { margin: 0; padding: 0; }"]
                          [:link
                           {:rel "stylesheet"
-                           :href (str "/" $css-loader-endpoint "/tabulator.min.css")}]]
+                           :href (str "/" $css-loader-endpoint "/tabulator.min.css")}]
+                         [:link
+                          {:rel "stylesheet"
+                           :href (str "/" $css-loader-endpoint "/styles.css")}]]
                         [:body
                          [:div {:id "main"}]
                          [:script
