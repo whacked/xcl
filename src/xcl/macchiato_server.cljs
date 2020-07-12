@@ -10,8 +10,12 @@
    [reitit.ring.coercion :as rrc]
    [macchiato.middleware.restful-format :as rf]
    [malli.json-schema]
+   [xcl.data-model :as model]
    [xcl.env :as env]
-   ["chalk" :as chalk]))
+   ["chalk" :as chalk]
+   ["yaml" :as yaml]
+   [xcl.database :as db]
+   ))
 
 
 (defn derive-all-routes [routes & [parent-chain]]
@@ -42,7 +46,7 @@
                     (derive-all-routes route parent-chain)
                     :else
                     (do
-                      (println (.yellow chalk (str "WARNING: skipped " route)))))))))
+                      (info (.red chalk (str "WARNING: skipped " route)))))))))
 
 (defn plain-text [body]
   {:status 200
@@ -77,7 +81,21 @@
     {:get {:handler (fn [request respond _]
                       (-> $routes
                           (routes-to-help)
-                          (respond)))}}]])
+                          (respond)))}}]
+
+   ["/data-model"
+    {:get {:handler (fn [request respond _]
+                      (->> model/table-model-mapping
+                           (map (fn [[table-name model-def]]
+                                  [(str "MODEL " table-name)
+                                   (malli.json-schema/transform
+                                    model-def)]))
+                           (into {})
+                           (clj->js)
+                           (.stringify yaml)
+                           (plain-text)
+                           (respond)))}}]
+   ])
 
 (defn wrap-body-to-params
   [handler]
@@ -118,5 +136,7 @@
                      (info "macchiato started"))})))
 
 (defn -main []
-  (server))
+  (db/initialize-database!
+   db/$default-settings)
 
+  (server))
