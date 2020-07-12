@@ -15,7 +15,7 @@
   [macchiato/core "0.2.16"]
   [reagent "0.8.1"]
   [camel-snake-kebab "0.4.1"]
-  [hiccups "0.3.0"]]
+  [macchiato/hiccups "0.4.1"]]
 
  ;; connect to the cljs repl from cider:
  ;; (shadow.cljs.devtools.api/nrepl-select :browser-sample)
