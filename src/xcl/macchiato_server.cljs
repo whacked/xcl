@@ -12,11 +12,21 @@
    [malli.json-schema]
    [xcl.data-model :as model]
    [xcl.env :as env]
+   ["path" :as path]
+   ["fs" :as fs]
    ["chalk" :as chalk]
    ["yaml" :as yaml]
    [xcl.database :as db]
+   [cljs.reader]
    ))
 
+(def $working-dir (.cwd js/process))
+(def $shadow-config
+  (-> (.readFileSync
+       fs
+       (.join path $working-dir "shadow-cljs.edn")
+       "utf-8")
+      (cljs.reader/read-string)))
 
 (defn derive-all-routes [routes & [parent-chain]]
   {:pre []}
@@ -46,7 +56,7 @@
                     (derive-all-routes route parent-chain)
                     :else
                     (do
-                      (info (.red chalk (str "WARNING: skipped " route)))))))))
+                      (info (.red chalk (str "WARNING: skipped: >>>" route "<<<")))))))))
 
 (defn plain-text [body]
   {:status 200
@@ -72,8 +82,16 @@
                  " "
                  [:code allowed-methods]])))
        (apply vector :div)
-       (h/html)
+       (h/html5)
        (plain-text)))
+
+(def $css-loader-endpoint "css")
+(def $js-loader-endpoint
+  (get-in $shadow-config [:builds :crud-frontend :output-to]))
+(def $crud-frontend-main-module
+  (-> (get-in $shadow-config [:builds :crud-frontend :modules])
+      (keys)
+      (first)))
 
 (def $routes
   [""
@@ -95,6 +113,70 @@
                            (.stringify yaml)
                            (plain-text)
                            (respond)))}}]
+
+   [(str "/" $css-loader-endpoint)
+    ["/*.css"
+     {:get {:handler (fn [request respond _]
+                       (-> (or (when-let [target-file-name
+                                          (get-in request [:path-params :.css])]
+                                 (let [css-path
+                                       (as-> "tabulator-tables" $
+                                         (.resolve js/require $)
+                                         (.dirname path $)
+                                         (.dirname path $)
+                                         (.join path $ "css")
+                                         (.join path $ target-file-name))]
+                                   (if (.existsSync fs css-path)
+                                     (plain-text (.readFileSync fs css-path "utf-8"))
+                                     {:status 404
+                                      :body (str "not found: " target-file-name)})))
+                               {:status 400
+                                :body (str "bad request")})
+                           (respond)))}}]]
+
+   [(str "/" $js-loader-endpoint)
+    ["/*.js" {:handler (fn [request respond _]
+                         (-> (or (when-let [target-file-name
+                                            (get-in request [:path-params :.js])]
+                                   (let [js-path (.join path
+                                                        $working-dir
+                                                        $js-loader-endpoint
+                                                        target-file-name)]
+                                     (if (.existsSync fs js-path)
+                                       (plain-text (.readFileSync fs js-path "utf-8"))
+                                       {:status 404
+                                        :body (str "not fonud: " target-file-name)})))
+                                 {:status 400
+                                  :body (str "bad request")})
+                             (assoc-in [:headers :content-type] "application/javascript")
+                             (respond))
+                         )}]]
+
+   ["/crud"
+    {:get {:handler (fn [request respond _]
+                      (->
+                       [:html
+                        [:head
+                         [:meta
+                          {:content "text/html;charset=utf-8"
+                           :http-equiv "Content-Type"}]
+                         [:meta
+                          {:content "utf-8"
+                           :http-equiv "encoding"}]
+                         [:link
+                          {:rel "stylesheet"
+                           :href (str "/" $css-loader-endpoint "/tabulator.min.css")}]]
+                        [:body
+                         [:div {:id "main"}]
+                         [:script
+                          {:type "text/javascript"
+                           :src (str "/" $js-loader-endpoint
+                                     "/" (name $crud-frontend-main-module) ".js")}]]]
+                       (h/html5)
+                       (plain-text)
+                       (assoc-in [:headers :content-type]
+                                 "text/html")
+                       (respond)))}}]
    ])
 
 (defn wrap-body-to-params

@@ -13,7 +13,7 @@
   [metosin/spec-tools "0.10.3"]
   [com.taoensso/timbre "4.10.0"]
   [macchiato/core "0.2.16"]
-  [reagent "0.8.1"]
+  [reagent "1.0.0-alpha2"]
   [camel-snake-kebab "0.4.1"]
   [macchiato/hiccups "0.4.1"]]
 
@@ -59,4 +59,13 @@
               :output-to "build/macchiato-server.js"
               :build-hooks [(shadow-env.core/hook)]
               :main xcl.macchiato-server/-main}
+
+  :crud-frontend {:target :browser
+                  :output-to "public/js"
+                  :asset-path "."
+                  :modules
+                  {:crud-main
+                   {:entries [xcl.model-crud-frontend]}}
+
+                  :build-hooks [(shadow-env.core/hook)]}
   }}
