@@ -12,16 +12,24 @@
    ["inflection" :as inflection]
    ["tabulator-tables" :as Tabulator]
    ["react-tabulator" :refer [ReactTabulator]]
-   ["react-tabs" :refer [Tab Tabs TabList TabPanel]]))
+   ["react-tabs" :refer [Tab Tabs TabList TabPanel]]
+   ["color-hash" :as ColorHash]))
 
+
+
+(def colorHash-dark (new ColorHash (clj->js {:lightness 0.3})))
+(defn make-dark-color [any]
+  (.hex colorHash-dark any))
+
+(def colorHash-light (new ColorHash (clj->js {:lightness 0.9})))
+(defn make-light-color [any]
+  (.hex colorHash-light any))
 
 (defn render-property [prop-symbol prop-value]
   (case prop-symbol
     :url [:a {:href prop-value} prop-value]
     
     prop-value))
-
-
 
 (defn property-collection-to-property-map [prop-coll]
   (->> prop-coll
@@ -59,9 +67,12 @@
                    [:td
                     {:width "5%"}
                     [:code (:symbolId prop)]]
-                   [:th
+                   [:td
                     {:width "15%"}
-                    [:code (:symbol prop)]]
+                    [:code
+                     {:style (str "color:" (make-dark-color (:symbol prop)) ";"
+                                  "background: " (make-light-color (:symbol prop)) ";")}
+                     (:symbol prop)]]
                    [:td
                     {:width "5%"}
                     [:code (:textId prop)]]
