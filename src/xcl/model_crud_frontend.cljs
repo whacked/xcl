@@ -33,19 +33,24 @@
 
 (defn property-collection-to-property-map [prop-coll]
   (->> prop-coll
-       (map (fn [{:keys [symbol text]}]
-              [symbol text]))
-       (into {})))
+       (reduce
+        (fn [out {:keys [symbol text]}]
+          (update out
+                  symbol
+                  (fn [current]
+                    (conj (or current #{})
+                          text))))
+        {})))
 
 (defn process-property-collection [prop-coll]
   (let [prop-map (property-collection-to-property-map prop-coll)]
-    (cond (and (= (:kind prop-map) "file")
+    (cond (and ((:kind prop-map) "file")
                (:file-path prop-map))
           [:span
            "open: "
            [:a
-            {:href (str "/file/" (:file-path prop-map))}
-            (:file-path prop-map)]]
+            {:href (str "/file/" (first (:file-path prop-map)))}
+            (first (:file-path prop-map))]]
 
           :else
           nil)))
