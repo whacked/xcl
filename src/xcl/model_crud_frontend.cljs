@@ -147,12 +147,14 @@
         [:> TabList
          (->> model/table-model-mapping
               (map first)
+              (sort)
               (map (fn [table-name]
                      ^{:key ["tab" table-name]}
                      [:> Tab table-name])))]
 
         (->> model/table-model-mapping
              (map first)
+             (sort)
              (map (fn [table-name]
                     (let [model-def (model/table-model-mapping table-name)
                           data-atom (r/atom
