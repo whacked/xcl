@@ -154,6 +154,14 @@
                              (assoc-in [:headers :content-type] "application/javascript")
                              (respond)))}]]
 
+   ["/file"
+    ["/:path"
+     {:get {:handler (fn [request respond _]
+                       (when-let [file-path (get-in request [:path-params :path])]
+                         (-> (plain-file file-path)
+                             (assoc-in [:headers :content-type] "text/plain")
+                             (respond))))}}]]
+
    ["/crud"
     [""
      {:get {:handler (fn [request respond _]
