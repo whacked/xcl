@@ -21,27 +21,58 @@
     
     prop-value))
 
+
+
+(defn property-collection-to-property-map [prop-coll]
+  (->> prop-coll
+       (map (fn [{:keys [symbol text]}]
+              [symbol text]))
+       (into {})))
+
+(defn process-property-collection [prop-coll]
+  (let [prop-map (property-collection-to-property-map prop-coll)]
+    (cond (and (= (:kind prop-map) "file")
+               (:file-path prop-map))
+          [:span
+           "open: "
+           [:a
+            {:href (str "/file/" (:file-path prop-map))}
+            (:file-path prop-map)]]
+
+          :else
+          nil)))
+
 (defn render-content-properties [properties]
-  (h/html
-   [:table
-    {:width "100%"}
-    [:tbody
-     (->> properties
-          (map (fn [prop]
-                 [:tr
-                  [:td
-                   {:width "5%"}
-                   [:code (aget prop "symbol" "id")]]
-                  [:th
-                   {:width "15%"}
-                   [:code (aget prop "symbol" "symbol")]]
-                  [:td
-                   {:width "5%"}
-                   [:code (aget prop "text" "id")]]
-                  [:td
-                   (render-property
-                    (keyword (aget prop "symbol" "symbol"))
-                    (aget prop "text" "text"))]])))]]))
+  (let [prop-coll (->> properties
+                       (map (fn [js-prop]
+                              {:symbolId (aget js-prop "symbol" "id")
+                               :symbol   (keyword (aget js-prop "symbol" "symbol"))
+                               :textId   (aget js-prop "text" "id")
+                               :text     (aget js-prop "text" "text")})))]
+   (h/html
+    [:table
+     {:width "100%"}
+     [:tbody
+      (->> prop-coll
+           (map (fn [prop]
+                  [:tr
+                   [:td
+                    {:width "5%"}
+                    [:code (:symbolId prop)]]
+                   [:th
+                    {:width "15%"}
+                    [:code (:symbol prop)]]
+                   [:td
+                    {:width "5%"}
+                    [:code (:textId prop)]]
+                   [:td
+                    (render-property
+                     (keyword (:symbol prop))
+                     (:text prop))]])))
+      [:tr
+       [:td
+        {:colspan 4}
+        (process-property-collection prop-coll)]]]])))
 
 (defn table-component [model-name data-atom]
   [:div
