@@ -19,6 +19,7 @@
    [xcl.database :as db]
    [cljs.reader]
    [promesa.core :as promesa]
+   [xcl.seed-data-loader]
    ))
 
 (def $working-dir (.cwd js/process))
@@ -272,7 +273,7 @@
            (fn iter-create-seed-data! [remain]
              (when (seq remain)
                (let [table-name (first remain)
-                     seed-data (db/seed-data table-name)
+                     seed-data (xcl.seed-data-loader/example-seed-data table-name)
                      insert-query
                      (db/generate-insert-query
                       builder table-name seed-data)]
