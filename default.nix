@@ -18,6 +18,8 @@ stdenv.mkDerivation rec {
 
         alias watch="shadow-cljs watch"
         alias we-m="watchexec --restart --no-ignore --watch build/ node build/macchiato-server.js"
+
+        cat default.nix | grep '^ *alias'
     '';
 }
 
