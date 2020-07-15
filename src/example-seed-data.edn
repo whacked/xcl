@@ -1,0 +1,55 @@
+{:symbol-map
+ {:url           1
+  :language      2
+  :file-format   3
+  :tag           4
+  :kind          5
+  :file-path     6
+  :name          7
+  }
+
+ :text-map
+ {"github"               1
+  "https://github.com"   2
+  "clojure"              3
+  "https://clojure.org"  4
+  "pdf"                  5
+  "png"                  6
+  "org"                  7
+  "html"                 8
+  "website"              9
+  "file"                10
+  "README.org"          11
+  "language"            12
+  }
+
+ :symbol-text-pairs
+ [[:url            "https://clojure.org"]
+  [:url            "https://github.com"]
+  [:name           "clojure"]
+  [:name           "github"]
+  [:kind           "website"]
+  [:kind           "file"]
+  [:kind           "language"]
+  [:file-format    "pdf"]
+  [:file-format    "org"]
+  [:file-format    "png"]
+  [:file-format    "html"]
+  [:file-path      "README.org"]]
+
+ :content-props
+ [[[:name "clojure"]
+   [:kind "language"]]
+  
+  [[:name "clojure"]
+   [:kind "website"]
+   [:url  "https://clojure.org"]]
+  
+  [[:name "github"]
+   [:kind "website"]
+   [:url "https://github.com"]]
+  
+  [[:file-path "README.org"]
+   [:kind "file"]
+   [:file-format "org"]]]
+ }
