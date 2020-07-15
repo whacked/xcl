@@ -258,28 +258,35 @@
        :on-success (fn [& args]
                      (info "macchiato started"))})))
 
+(def $bootstrap-data? true)
 (defn -main []
   (db/initialize-database!
    db/$default-settings
    (fn [builder]
-     (let [tables
-           ;; specify order explicitly to avoid contention from table dependency
-           ["symbol" "text"
-            "property"
-            "content"
-            "content__property"]
-           
-           iter-create-seed-data!
-           (fn iter-create-seed-data! [remain]
-             (when (seq remain)
-               (let [table-name (first remain)
-                     seed-data (xcl.seed-data-loader/example-seed-data table-name)
-                     insert-query
-                     (db/generate-insert-query
-                      builder table-name seed-data)]
-                 (promesa/do!
-                  (db/run-sql! builder insert-query)
-                  (iter-create-seed-data! (rest remain))))))]
-       (iter-create-seed-data! tables))))
+     
+     (if $bootstrap-data?
+       
+       (xcl.seed-data-loader/bootstrap-from-content-props!
+        @db/$builder (:content-props xcl.seed-data-loader/example-data-input))
+
+       (let [tables
+             ;; specify order explicitly to avoid contention from table dependency
+             ["symbol" "text"
+              "property"
+              "content"
+              "content__property"]
+             
+             iter-create-seed-data!
+             (fn iter-create-seed-data! [remain]
+               (when (seq remain)
+                 (let [table-name (first remain)
+                       seed-data (xcl.seed-data-loader/example-seed-data table-name)
+                       insert-query
+                       (db/generate-insert-query
+                        builder table-name seed-data)]
+                   (promesa/do!
+                    (db/run-sql! builder insert-query)
+                    (iter-create-seed-data! (rest remain))))))]
+         (iter-create-seed-data! tables)))))
   
   (server))

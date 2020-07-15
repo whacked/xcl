@@ -1,6 +1,7 @@
 (ns xcl.database
   (:require [xcl.data-model :as model]
             [malli.json-schema]
+            [taoensso.timbre :refer [info]]
             [camel-snake-kebab.core :as csk]
             ["json-schema-sequelizer" :as JSONSchemaSequelizer]
             ;; included by sequelize
@@ -70,9 +71,9 @@
   (when-let [[_ prefix sql]
              (re-find #"([^:]+:)\s(.+)" log)]
     (js/console.log
-     (str (.green chalk prefix)
+     (str (.cyan chalk prefix)
           "\n  "
-          (.yellow chalk sql)))))
+          (.white chalk sql)))))
 
 (defonce $builder (atom nil))
 
@@ -313,3 +314,24 @@
                   (->> (array-seq result)
                        (map resolve-sequelize-data-values)
                        (callback))))))))
+
+(defn run-in-transaction! [builder txn-fn]
+  (-> (aget builder "sequelize")
+      (js-invoke "transaction" txn-fn)))
+
+(defn find-or-create [builder table-name data callback & [transaction]]
+  (let [sequelize-models (aget builder "models")]
+    (-> (aget sequelize-models table-name)
+        (js-invoke
+         "findOrCreate" (clj->js {:where data
+                                  :transaction transaction}))
+        (js-invoke
+         "spread"
+         (fn [result created?]
+           (let [record (-> (aget result "dataValues")
+                            (js->clj :keywordize-keys true))]
+             (if created?
+               (info (str (.green chalk (str "created new <" table-name "> record: "))
+                          (select-keys record [:id])))
+               (info (str (.green chalk (str "retrieved existing record from <" table-name ">")))))
+             (callback record)))))))
