@@ -62,33 +62,34 @@
                                :symbol   (keyword (aget js-prop "symbol" "symbol"))
                                :textId   (aget js-prop "text" "id")
                                :text     (aget js-prop "text" "text")})))]
-   (h/html
-    [:table
-     {:width "100%"}
-     [:tbody
-      (->> prop-coll
-           (map (fn [prop]
-                  [:tr
-                   [:td
-                    {:width "5%"}
-                    [:code (:symbolId prop)]]
-                   [:td
-                    {:width "15%"}
-                    [:code
-                     {:style (str "color:" (make-dark-color (:symbol prop)) ";"
-                                  "background: " (make-light-color (:symbol prop)) ";")}
-                     (:symbol prop)]]
-                   [:td
-                    {:width "5%"}
-                    [:code (:textId prop)]]
-                   [:td
-                    (render-property
-                     (keyword (:symbol prop))
-                     (:text prop))]])))
-      [:tr
-       [:td
-        {:colspan 4}
-        (process-property-collection prop-coll)]]]])))
+
+    (h/html
+     [:table
+      {:width "100%"}
+      [:tbody
+       (->> prop-coll
+            (map (fn [prop]
+                   [:tr
+                    [:td
+                     {:width "5%"}
+                     [:code (:symbolId prop)]]
+                    [:td
+                     {:width "15%"}
+                     [:code
+                      {:style (str "color:" (make-dark-color (:symbol prop)) ";"
+                                   "background: " (make-light-color (:symbol prop)) ";")}
+                      (:symbol prop)]]
+                    [:td
+                     {:width "5%"}
+                     [:code (:textId prop)]]
+                    [:td
+                     (render-property
+                      (keyword (:symbol prop))
+                      (:text prop))]])))
+       [:tr
+        [:td
+         {:colspan 4}
+         (process-property-collection prop-coll)]]]])))
 
 (defn table-component [model-name data-atom]
   [:div
@@ -140,7 +141,7 @@
                                    :field field-name
                                    :formatter (fn [cell _formatter-params _on-rendered]
                                                 (let [value (.getValue cell)]
-                                                  (if (aget value "length")
+                                                  (if (< 0 (aget value "length"))
                                                     (render-content-properties value)
                                                     value)))}))))))))}]])
 
