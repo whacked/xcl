@@ -44,7 +44,7 @@
 
 (defn process-property-collection [prop-coll]
   (let [prop-map (property-collection-to-property-map prop-coll)]
-    (cond (and ((:kind prop-map) "file")
+    (cond (and ((:kind prop-map #{}) "file")
                (:file-path prop-map))
           [:span
            "open: "
@@ -95,6 +95,39 @@
   [:div
    [:> ReactTabulator
     {:data @data-atom
+     :cellEdited (fn [cell]
+                   (js/console.info cell)
+                   (let [table-name (-> cell
+                                        (.getColumn)
+                                        (.getDefinition)
+                                        (aget "field"))
+                         cell-id (-> (.getData cell)
+                                     (aget "id"))
+                         new-cell-value (.getValue cell)]
+                     (ajax/POST
+                      (str (aget js/location "href")
+                           "/" table-name)
+                      {:response-format :json
+                       :format (ajax/json-request-format)
+                       :params {:id cell-id
+                                (keyword table-name) new-cell-value}
+                       :handler (fn [result]
+                                  (->> result
+                                       (js/JSON.parse)
+                                       (js/console.info))
+                                  
+                                  (let [row-index-1 (-> cell
+                                                        (.getRow)
+                                                        (.getIndex))
+                                        collection-index (dec row-index-1)]
+                                    (swap! data-atom
+                                           (fn [js-table-array]
+                                             (aset js-table-array collection-index table-name new-cell-value)
+                                             js-table-array))))
+                       
+                       :error-handler (fn [err]
+                                        (js/alert (str "ERROR: edit for the cell failed"))
+                                        (js/console.error (pr-str err)))})))
      :columns (loop [remain-attrs (rest (model/table-model-mapping model-name))
                      out []]
      
