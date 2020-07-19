@@ -327,3 +327,18 @@
                (info (str (.green chalk (str "retrieved existing record from <" table-name ">")))))
              (when callback
                (callback record))))))))
+
+(defn update-record
+  ([table-name data callback]
+   (update-record @$builder table-name data callback))
+  ([builder table-name data callback]
+   (let [sequelize-models (aget builder "models")]
+     (-> (aget sequelize-models table-name)
+         (js-invoke
+          "update"
+          (clj->js (dissoc data :id))
+          (clj->js {:where (select-keys data [:id])}))
+         (js-invoke
+          "then"
+          (fn [result]
+            (callback result)))))))

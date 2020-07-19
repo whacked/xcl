@@ -218,7 +218,29 @@
                                 (fn [results]
                                   (-> results
                                       (make-json-response)
-                                      (respond)))))))}}]]])
+                                      (respond)))))))}
+      :post {:handler (fn [request respond _]
+                        (let [model-name (get-in request [:path-params :model])
+                              payload (get-in request [:params :body-params])]
+
+                          (cond (not (db/has-table? model-name))
+                                (-> {:status 404
+                                     :body (str "not such model: " model-name)}
+                                    (respond))
+
+                                (#{"text" "symbol"} model-name)
+                                (db/update-record
+                                 model-name
+                                 payload
+                                 (fn [result]
+                                   (-> result
+                                       (make-json-response)
+                                       (respond))))
+                                
+                                :else
+                                (-> {:status 400
+                                     :body "unsupported request"}
+                                    (respond)))))}}]]])
 
 (defn wrap-body-to-params
   [handler]
