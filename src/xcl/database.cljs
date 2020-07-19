@@ -143,21 +143,11 @@
   (-> @$builder
       (.connect)
       (.then
-       (fn []
-         
-         ;; show for single model
-         #_(-> builder
-               (aget "models" "Text")
-               (.sync (clj->js {:logging js/console.log})))
-         
-         (-> @$builder
-             (.sync
-              (clj->js
-               {:logging sql-exec-logger}))
-             (.then
-              (fn [_]
-                (when on-ready
-                  (on-ready @$builder)))))))))
+       (fn [builder]
+         (.sync builder (clj->js {:logging sql-exec-logger}))))
+      (.then
+       (fn [builder]
+         (when on-ready (on-ready builder))))))
   
 (defn get-table-actions-manager [builder table-name]
   (-> (.resource JSONSchemaSequelizer
@@ -206,19 +196,20 @@
           (.create (clj->js record))))))
 
 (defn resolve-sequelize-data-values [query-result]
-  (->> (some-> (aget query-result "dataValues")
-               (js->clj :keywordize-keys true))
-       (map (fn [[key maybe-sequelize-record]]
-              [key
-               (cond (sequential? maybe-sequelize-record)
-                     (->> maybe-sequelize-record
-                          (map resolve-sequelize-data-values))
+  (some->> (some-> query-result
+                   (aget "dataValues")
+                   (js->clj :keywordize-keys true))
+           (map (fn [[key maybe-sequelize-record]]
+                  [key
+                   (cond (sequential? maybe-sequelize-record)
+                         (->> maybe-sequelize-record
+                              (map resolve-sequelize-data-values))
 
-                     (aget maybe-sequelize-record "dataValues")
-                     (resolve-sequelize-data-values maybe-sequelize-record)
+                         (aget maybe-sequelize-record "dataValues")
+                         (resolve-sequelize-data-values maybe-sequelize-record)
                      
-                     :else maybe-sequelize-record)]))
-       (into {})))
+                         :else maybe-sequelize-record)]))
+           (into {})))
 
 (defn find-by-id
   ([table-name ^int id callback]
@@ -237,7 +228,7 @@
       (js-invoke extent 
                  (clj->js {:where selector}))
       (.then (fn [result]
-               (if (aget result "length")
+               (if (some-> result (aget "length"))
                  (callback (->> (array-seq result)
                                 (map resolve-sequelize-data-values)))
                  (callback
@@ -319,19 +310,20 @@
   (-> (aget builder "sequelize")
       (js-invoke "transaction" txn-fn)))
 
-(defn find-or-create [builder table-name data callback & [transaction]]
+(defn find-or-create [builder table-name data & [callback]]
   (let [sequelize-models (aget builder "models")]
     (-> (aget sequelize-models table-name)
         (js-invoke
-         "findOrCreate" (clj->js {:where data
-                                  :transaction transaction}))
+         "findOrCreate" (clj->js {:where data}))
         (js-invoke
          "spread"
          (fn [result created?]
-           (let [record (-> (aget result "dataValues")
-                            (js->clj :keywordize-keys true))]
+           (let [record (some-> result
+                                (aget "dataValues")
+                                (js->clj :keywordize-keys true))]
              (if created?
                (info (str (.green chalk (str "created new <" table-name "> record: "))
                           (select-keys record [:id])))
                (info (str (.green chalk (str "retrieved existing record from <" table-name ">")))))
-             (callback record)))))))
+             (when callback
+               (callback record))))))))
