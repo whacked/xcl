@@ -4,6 +4,8 @@
             [taoensso.timbre :refer [info]]
             [xcl.database :as db]
             [cljs.reader]))
+            ["chalk" :as chalk]
+            [promesa.core :as promesa]
 
 (defonce example-data-input
   (-> (.readFileSync
@@ -72,80 +74,48 @@
 
 (defn bootstrap-from-content-props! [builder content-props]
   (info (str "ingesting: " (count content-props) " props..."))
-  (let [ensure-content-prop-link!
-        (fn [content-id prop-id nextfn]
-          (-> (aget builder "models" "content__property")
-              (.create (clj->js {:contentId content-id
-                                 :propertyId prop-id}))
-              (.then nextfn)))
-        
-        ensure-content-props!
-        (fn [property-ids nextfn]
-          (let [content-table (aget builder "models" "content")]
-            (-> content-table
-                (js-invoke "count")
-                (.then
-                 (fn [nrecords]
-                   (let [new-content-id (inc nrecords)]
-                     (-> content-table
-                         (.create (clj->js {:id new-content-id}))
-                         (.then (fn [content-record]
-                                  (let [iterator
-                                        (fn iterator [remain-prop-ids]
-                                          (if (empty? remain-prop-ids)
-                                            (nextfn content-record)
-                                            (ensure-content-prop-link!
-                                             new-content-id
-                                             (first remain-prop-ids)
-                                             (fn []
-                                               (iterator (rest remain-prop-ids))))))]
-                                    (iterator property-ids)))))))))))
-        
-        iterate-remain-content-props
-        (fn iterate-remain-content-props [remain-content-props]
-          (when (seq remain-content-props)
-            (let [property-ids (atom [])
-                  
-
-                  iterate-remain-props
-                  (fn iterate-remain-props [remain-props]
-                    (if-let [[symbol text] (first remain-props)]
-                      (let [ensure-symbol! (fn [symbol nextfn]
-                                             (db/find-or-create
-                                              builder "symbol"
-                                              {:symbol symbol} nextfn))
-                          
-                            ensure-text! (fn [text nextfn]
-                                           (db/find-or-create
-                                            builder "text"
-                                            {:text text} nextfn))
-
-                            ensure-property! (fn [symbol-id text-id nextfn]
-                                               (db/find-or-create
-                                                builder "property"
-                                                {:symbolId symbol-id
-                                                 :textId text-id}
-                                                nextfn))]
-                        
-                        (ensure-symbol!
-                         symbol
-                         (fn [symbol-record]
-                           (ensure-text!
-                            text
-                            (fn [text-record]
-                              (ensure-property!
-                               (:id symbol-record)
-                               (:id text-record)
-                               (fn [prop-record]
-                                 (swap! property-ids conj (:id prop-record))
-                                 (iterate-remain-props (rest remain-props)))))))))
-
-                      (ensure-content-props!
-                       @property-ids
-                       (fn [record]
-                         (iterate-remain-content-props
-                          (rest remain-content-props))))))]
-
-              (iterate-remain-props (first remain-content-props)))))]
+  (let [content-table (aget builder "models" "content")
+        content--property-orm (aget builder "models" "content__property")]
     
-    (iterate-remain-content-props content-props)))
+    (->> content-props
+         ((fn iterate-remain-content-props [remain-content-props]
+            (when-let [prop-coll (first remain-content-props)]
+              (let [property-ids (atom [])]
+                (->> prop-coll
+                     ((fn iterate-remain-props [remain-props]
+                        (if (empty? remain-props)
+                          
+                          ;; create a content record + join with property records
+                          (-> (js-invoke content-table "create")
+                              (.then (fn [content-record]
+                                       (let [content-prop-associations
+                                             (->> @property-ids
+                                                  (map (fn [property-id]
+                                                         {:contentId (aget content-record "id")
+                                                          :propertyId property-id})))]
+                                         (js-invoke content--property-orm "bulkCreate"
+                                                    (clj->js content-prop-associations)))))
+                              (.then (fn [_content-record]
+                                       (iterate-remain-content-props
+                                        (rest remain-content-props)))))
+                          
+                          (let [[symbol text] (first remain-props)
+                                new-symbol (atom nil)
+                                new-text (atom nil)]
+                            (-> (promesa/do!
+                                 (db/find-or-create builder "symbol" {:symbol symbol} (partial reset! new-symbol))
+                                 (db/find-or-create builder "text" {:text text} (partial reset! new-text)))
+                                (promesa/then
+                                 (fn []
+                                   (db/find-or-create
+                                    builder "property"
+                                    {:symbolId (:id @new-symbol)
+                                     :textId (:id @new-text)}
+                                    ;; unclear why this changes behavior, but it fails with
+                                    ;;   UnhandledPromiseRejectionWarning: SequelizeUniqueConstraintError: Validation error
+                                    ;; when run without a runnable callback
+                                    identity)))
+                                (promesa/then
+                                 (fn [prop-record]
+                                   (swap! property-ids conj (:id prop-record))
+                                   (iterate-remain-props (rest remain-props)))))))))))))))))
