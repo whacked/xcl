@@ -7,7 +7,16 @@
   [com.cemerick/url "0.1.1"]
   [mhuebert/shadow-env "0.1.6"]
   [org.clojure/data.json "1.0.0"]
-  [reagent "0.8.1"]]
+  [prismatic/schema "1.1.12"]
+  [metosin/malli "0.0.1-SNAPSHOT"]
+  [metosin/reitit "0.5.1"]
+  [metosin/spec-tools "0.10.3"]
+  [com.taoensso/timbre "4.10.0"]
+  [macchiato/core "0.2.16"]
+  [funcool/promesa "5.1.0"]
+  [reagent "1.0.0-alpha2"]
+  [camel-snake-kebab "0.4.1"]
+  [macchiato/hiccups "0.4.1"]]
 
  ;; connect to the cljs repl from cider:
  ;; (shadow.cljs.devtools.api/nrepl-select :browser-sample)
@@ -46,4 +55,18 @@
                    :output-to "build/webserver.js"
                    :build-hooks [(shadow-env.core/hook)]
                    :main xcl.node-webserver/-main}
+
+  :macchiato {:target :node-script
+              :output-to "build/macchiato-server.js"
+              :build-hooks [(shadow-env.core/hook)]
+              :main xcl.macchiato-server/-main}
+
+  :crud-frontend {:target :browser
+                  :output-to "public/js"
+                  :asset-path "."
+                  :modules
+                  {:crud-main
+                   {:entries [xcl.model-crud-frontend]}}
+
+                  :build-hooks [(shadow-env.core/hook)]}
   }}
