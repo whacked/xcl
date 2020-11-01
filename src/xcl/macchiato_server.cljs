@@ -280,8 +280,18 @@
        :on-success (fn [& args]
                      (info "macchiato started"))})))
 
+
+
 (def $bootstrap-data? true)
 (defn -main []
+  (js/console.log (.yellow
+                   chalk
+                   (str
+                    (apply str (take 50 (repeat "=")))
+                    " OK "
+                    (apply str (take 50 (repeat "="))))))
+
+
   (db/initialize-database!
    db/$default-settings
    (fn [builder]
@@ -311,4 +321,5 @@
                     (iter-create-seed-data! (rest remain))))))]
          (iter-create-seed-data! tables)))))
   
-  (server))
+  (server)
+  )
