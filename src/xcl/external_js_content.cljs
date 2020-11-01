@@ -62,9 +62,9 @@
                                   (str (name k) ":" v ";")))
                            (apply str)))
                 (js/document.body.appendChild dom-el)
-                (let [rendition (.renderTo
-                                 book dom-el
-                                 (clj->js {}))
+                (let [rendition ^epub/Rendition (.renderTo
+                                                 book dom-el
+                                                 (clj->js {}))
                       load-pages!
                       (fn load-pages! [remain]
                         (if (empty? remain)

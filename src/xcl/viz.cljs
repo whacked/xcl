@@ -1,5 +1,6 @@
 (ns xcl.viz
   (:require [reagent.core :as r]
+            [reagent.dom :as rdom]
             [goog.dom :as gdom]
             [xcl.core :as sc]
             [xcl.corpus :as corpus]
@@ -893,7 +894,7 @@ aye aye aye??-2@??-1@"
 
 (defn main []
   (let [view-state (r/atom {:hide-passing? false})]
-    (r/render
+    (rdom/render
      [:div
       [:div
        [:label

@@ -7,6 +7,5 @@
    (slurp
     (io/file
      (System/getProperty "user.dir")
-     ".."
      fname))
    #"\r\n" "\n"))
