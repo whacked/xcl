@@ -342,3 +342,18 @@
           "then"
           (fn [result]
             (callback result)))))))
+
+(defn find-or-create-notxn [builder table-name data callback]
+  (find-by-attribute-one
+   builder
+   table-name
+   data
+   (fn [match]
+     (if match
+       (callback match)
+       (-> (aget builder "models" table-name)
+           (js-invoke "create" (clj->js data))
+           (.then (fn [result]
+                    (-> result
+                        (resolve-sequelize-data-values)
+                        (callback)))))))))
