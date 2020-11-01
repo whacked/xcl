@@ -227,8 +227,11 @@
                        :else
                        (or maybe-in-memory-buffer-type
                            :file))
-        
-        remainder (or maybe-remainder link)
+
+        remainder-with-post-processors (-> (or maybe-remainder link)
+                                           (clojure.string/split #"[|¦]"))
+        remainder (first remainder-with-post-processors)
+        post-processors (seq (rest remainder-with-post-processors)) 
         
         [path maybe-qualifier-separator maybe-qualifier]
         (rest (re-find link-matcher remainder))
@@ -256,6 +259,7 @@
         ]
     
     {:link link
+     :post-processors post-processors
      :protocol protocol
      :resource-resolver-path (if (@$in-memory-buffer-types
                                   protocol)

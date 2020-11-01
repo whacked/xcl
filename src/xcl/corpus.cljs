@@ -65,6 +65,9 @@ north star mars car
    "xcl-test-self-recursion.org" "I include myself:\n{{{transclude(xcl:xcl-test-self-recursion.org)}}}"
    "xcl-test-infinite-1.org" "Hi from 1. I include infinite 2:\n{{{transclude(xcl:xcl-test-infinite-2.org)}}}"
    "xcl-test-infinite-2.org" "Hi from 2. I include infinite 1:\n{{{transclude(xcl:xcl-test-infinite-1.org)}}}"
+   "sub/directory/xcl-in-subdir.org" "I have a link to another file:\nglider\n\nyou can [[file:more/fly-away.org]] with me\n\nI can [[more/fly-away.org]] with you\n\n[[fly-away]]\n\nthe end."
+   "sub/directory/more/fly-away.org" "into the horizon"
+   "xcl-test-rewrite.org" "relpath rewrite filter?\n\n{{{transclude(sub/directory/xcl-in-subdir.org|rewrite-relative-paths)}}}"
    "test-note-file.json" (loader/slurp-file "public/test-note-file.json")
    "test-highlight-file.yml" (loader/slurp-file "public/test-highlight-file.yml")
    })

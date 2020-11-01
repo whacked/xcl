@@ -261,6 +261,33 @@
             (pr-str resolver-spec))
       (@$resolver :whole-file))))
 
+;; WARNING: no provision for windows
+(def $DIRECTORY-SEPARATOR "/")
+                 
+(def $known-post-processors
+  (atom {"rewrite-relative-paths"
+         (fn [content resolved-spec]
+           (let [maybe-directory
+                 (->> (clojure.string/split
+                       (:resource-resolver-path resolved-spec)
+                       $DIRECTORY-SEPARATOR)
+                      (drop-last)
+                      (interpose $DIRECTORY-SEPARATOR)
+                      (apply str))
+                 resource-base-directory (if (empty? maybe-directory)
+                                           "."
+                                           maybe-directory)
+                 replace (fn [s]
+                           (clojure.string/replace
+                            s
+                            #"\[\[(file:)?(.+?)(\.[^\.]+)\]"
+                            (str "[[$1" resource-base-directory "/$2$3]")))]
+             (->> content
+                  (clojure.string/split-lines)
+                  (interpose "\n")
+                  (apply str)
+                  (replace))))}))
+
 (defn resolve-content [resolved-spec content]
   (when content
     (let [final-resolver-spec
@@ -268,9 +295,23 @@
                (:content-resolvers)
                (last))
           
-          resolver (get-resolver
-                    final-resolver-spec)]
-      (resolver final-resolver-spec content))))
+          resolver (get-resolver final-resolver-spec)]
+      (loop [remaining-post-processors
+             (:post-processors resolved-spec)
+             out (resolver final-resolver-spec content)]
+        (if (empty? remaining-post-processors)
+          out
+          (let [post-processor-name (first remaining-post-processors)
+                post-processor (if-let [func (@$known-post-processors
+                                              post-processor-name)]
+                                 func
+                                 (do (warn (str "NO SUCH POST PROCESSOR: "
+                                                post-processor-name
+                                                " within "
+                                                (keys @$known-post-processors)))
+                                     identity))]
+            (recur (rest remaining-post-processors)
+                   (post-processor out resolved-spec))))))))
 
 (def Node-TEXT_NODE (atom 3))
 

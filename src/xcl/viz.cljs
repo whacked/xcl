@@ -351,6 +351,8 @@
                 "file:dummy: the clone.org" "dummy: the clone.org"]
                ["glob file name"
                 "file:d*y.org" "dummy.org"]
+               ["glob with chained post-processors"
+                "file:d*y.org|proc1|proc2" "dummy.org"]
                ["glob file name"
                 "file:dummy: the clone*" "dummy: the clone.org"]
                ["fuzzy find file by content +"
@@ -448,6 +450,12 @@
          "seven 7s\nocho acht"
          "tiny.org" :exact-name
          :line-range {:beg 7 :end nil}]
+        ["line to end, with post processor expression"
+         "file:sub/directory/xcl-in-subdir.org::2-|rewrite-relative-paths"
+         "glider\n\nyou can [[file:sub/directory/more/fly-away.org]] with me\n\nI can [[sub/directory/more/fly-away.org]] with you\n\n[[fly-away]]\n\nthe end."
+         "sub/directory/xcl-in-subdir.org" :exact-name
+         :line-range {:beg 2 :end nil}
+         {:post-processors ["rewrite-relative-paths"]}]
         ["character range"
          "tiny.org::5,40"
          "file (line 1)\n* decoy 1\n* something"
@@ -616,16 +624,18 @@
                   -resolver-path
                   -resolver-method
                   -maybe-main-resolver-type
-                  -maybe-main-resolver-bound]]
+                  -maybe-main-resolver-bound
+                  -additional-merge-map]]
               (let [expected-spec
-                    (assoc
-                     {:resource-resolver-path -resolver-path
-                      :resource-resolver-method -resolver-method}
-                     :content-resolvers
-                     (if -maybe-main-resolver-type
-                       [{:type -maybe-main-resolver-type
-                         :bound -maybe-main-resolver-bound}]
-                       -maybe-main-resolver-bound))
+                    (-> {:resource-resolver-path -resolver-path
+                         :resource-resolver-method -resolver-method}
+                        (assoc
+                         :content-resolvers
+                         (if -maybe-main-resolver-type
+                           [{:type -maybe-main-resolver-type
+                             :bound -maybe-main-resolver-bound}]
+                           -maybe-main-resolver-bound))
+                        (merge -additional-merge-map))
                     received-match-text (r/atom nil)]
                 
                 (resolve-resource-spec-async
@@ -770,7 +780,10 @@ aye aye aye??-2@??-1@"
                            [:content-resolvers 0 :bound :beg])
                    "\n"
                    "@" depth " -- " s "\n"
-                   "#+END_TRANSCLUSION\n"))]]]
+                   "#+END_TRANSCLUSION\n"))]]
+          ["xcl-test-rewrite.org"
+           "relpath rewrite filter?\n\nI have a link to another file:\nglider\n\nyou can [[file:sub/directory/more/fly-away.org]] with me\n\nI can [[sub/directory/more/fly-away.org]] with you\n\n[[fly-away]]\n\nthe end."
+           nil]]
          (map (fn [[source-file expected postprocessor-coll]]
                 (let [source-text (get-static-content source-file)
                       rendered (apply
