@@ -34,12 +34,12 @@
 (defn property-collection-to-property-map [prop-coll]
   (->> prop-coll
        (reduce
-        (fn [out {:keys [symbol text]}]
+        (fn [out {:keys [symbol string]}]
           (update out
                   symbol
                   (fn [current]
                     (conj (or current #{})
-                          text))))
+                          string))))
         {})))
 
 (defn process-property-collection [prop-coll]
@@ -60,8 +60,8 @@
                        (map (fn [js-prop]
                               {:symbolId (aget js-prop "symbol" "id")
                                :symbol   (keyword (aget js-prop "symbol" "symbol"))
-                               :textId   (aget js-prop "text" "id")
-                               :text     (aget js-prop "text" "text")})))]
+                               :stringId   (aget js-prop "string" "id")
+                               :string     (aget js-prop "string" "string")})))]
 
     (h/html
      [:table
@@ -81,11 +81,11 @@
                       (:symbol prop)]]
                     [:td
                      {:width "5%"}
-                     [:code (:textId prop)]]
+                     [:code (:stringId prop)]]
                     [:td
                      (render-property
                       (keyword (:symbol prop))
-                      (:text prop))]])))
+                      (:string prop))]])))
        [:tr
         [:td
          {:colspan 4}
@@ -130,14 +130,14 @@
                                         (js/console.error (pr-str err)))})))
      :columns (loop [remain-attrs (rest (model/table-model-mapping model-name))
                      out []]
-     
+                
                 (if (empty? remain-attrs)
                   out
-       
+                  
                   (let [[key validator] (first remain-attrs)
-             
+                        
                         field-name (name key)
-             
+                        
                         column
                         (merge
                          {:title field-name
@@ -158,7 +158,7 @@
                                     (if (= :id key)
                                       {:width 80}
                                       {:editor "input"})))
-                  
+                             
                              ;; joined model
                              (conj
                               out

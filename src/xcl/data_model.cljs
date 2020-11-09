@@ -11,14 +11,14 @@
   (assoc PDbRecord
          :symbol s/Str))
 
-(def PText
+(def PString
   (assoc PDbRecord
-         :text s/Str))
+         :string s/Str))
 
 (def PProperty
   (assoc PDbRecord
          :symbol PSymbol
-         :text PText))
+         :string PString))
 
 (def PContent
   (assoc PDbRecord
@@ -35,24 +35,24 @@
    {:id 1
     :symbol "asdf"})
 
-(def MText
+(def MString
   [:map
    [:id int?]
-   [:text string?]])
+   [:string string?]])
 
 (def MProperty
   [:map
    [:id int?]
    [:symbol MSymbol]
-   [:text MText]])
+   [:string MString]])
 
 #_(m/validate
    MProperty
    {:id 1
     :symbol {:id 1
              :symbol "something"}
-    :text {:id 99
-           :text "other thing"}})
+    :string {:id 99
+             :string "other thing"}})
 
 (def MContent
   [:map
@@ -61,7 +61,7 @@
 
 
 (def table-model-mapping
-  {"text" MText
+  {"string" MString
    "symbol" MSymbol
    "property" MProperty
    "content" MContent})

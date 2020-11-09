@@ -23,41 +23,41 @@
       (cljs.reader/read-string)))
 
 (def example-seed-data
-  (let [{:keys [symbol-map text-map
-                symbol-text-pairs
+  (let [{:keys [symbol-map string-map
+                symbol-string-pairs
                 content-props]} example-data-input
         
         symbol-seed
         (->> symbol-map
              (map (fn [[s id]] {:id id :symbol (name s)})))
         
-        text-seed
-        (->> text-map
-             (map (fn [[t id]] {:id id :text t})))
+        string-seed
+        (->> string-map
+             (map (fn [[t id]] {:id id :string t})))
 
         property-map
-        (->> symbol-text-pairs
+        (->> symbol-string-pairs
              (map-indexed
-              (fn [i [symbol text]]
-                [[symbol text] (inc i)]))
+              (fn [i [symbol string]]
+                [[symbol string] (inc i)]))
              (into {}))
         
         property-seed
         (->> property-map
              (map
-              (fn [[[symbol text] id]]
+              (fn [[[symbol string] id]]
                 {:id id
                  :symbolId (symbol-map symbol)
-                 :textId   (text-map   text)})))
+                 :stringId   (string-map   string)})))
         
         content-map
         (->> content-props
              (map-indexed
               (fn [i props]
                 [(inc i) (->> props
-                              (map (fn [[symbol text]]
+                              (map (fn [[symbol string]]
                                      (property-map
-                                      [symbol text]))))]))
+                                      [symbol string]))))]))
              (into {}))
 
         content-seed
@@ -65,7 +65,7 @@
              (map (fn [[id _prop-ids]] {:id id})))
         ]
     {"symbol" symbol-seed
-     "text" text-seed
+     "string" string-seed
      "property" property-seed
      "content" content-seed
      
@@ -127,15 +127,15 @@
      builder "symbol" {:symbol symbol}
      (fn [record] (fire-created-event! "symbol" record carrier-data)))))
 
-(defn create-text! [builder text carrier-data]
+(defn create-string! [builder string carrier-data]
   (if $SIMULATE?
     (js/setTimeout
-     (fn [_] (fire-created-event! "text" {:id (rand-int 9999)} carrier-data))
+     (fn [_] (fire-created-event! "string" {:id (rand-int 9999)} carrier-data))
      0)
 
     (db/find-or-create-notxn
-     builder "text" {:text text}
-     (fn [record] (fire-created-event! "text" record carrier-data)))))
+     builder "string" {:string string}
+     (fn [record] (fire-created-event! "string" record carrier-data)))))
 
 (defn create-property-if-possible! [builder shared-state]
   (when-let [property-inputs (some->> shared-state
@@ -155,11 +155,11 @@
              (fire-created-event! "property" new-property shared-state)))
          0)
 
-        (let [{:keys [symbol-id text-id]} property-inputs
+        (let [{:keys [symbol-id string-id]} property-inputs
               content-state-atom (:content-state shared-state)]
           (db/find-or-create-notxn
            builder "property" {:symbolId symbol-id
-                               :textId text-id}
+                               :stringId string-id}
            (fn [property-record]
              (println property-record)
              (fire-created-event! "property" property-record shared-state))))))))
@@ -200,7 +200,7 @@
                           "content" (partial js-invoke chalk "cyan")
                           "property" (partial js-invoke chalk "yellow")
                           "symbol" (partial js-invoke chalk "magenta")
-                          "text" (partial js-invoke chalk "blue"))]
+                          "string" (partial js-invoke chalk "blue"))]
           (println (str
                     (colorizer
                      (str "[" (clojure.string/upper-case model-name) "] event "))
@@ -224,10 +224,10 @@
      (create-property-if-possible! builder shared-state)))
 
   (create-event-handler-loop!
-   "text"
-   (fn [text-record shared-state]
+   "string"
+   (fn [string-record shared-state]
      (swap! (:property-state shared-state)
-            merge {:text-id (:id text-record)})
+            merge {:string-id (:id string-record)})
      (create-property-if-possible! builder shared-state)))
 
   (create-event-handler-loop!
@@ -245,11 +245,11 @@
    (fn [content-record shared-state]
      (println "CONTENT DONE:" content-record)
      #_(let [content-shared-state (-> shared-state (:content-state) (deref))]
-       (doseq [prop-rec (-> content-shared-state
-                            (:properties))]
-         (println "==>"
-                  {:contentId (:content-id content-shared-state)
-                   :propertyId (:property-id prop-rec)})))))
+         (doseq [prop-rec (-> content-shared-state
+                              (:properties))]
+           (println "==>"
+                    {:contentId (:content-id content-shared-state)
+                     :propertyId (:property-id prop-rec)})))))
   
   #_(-> (aget builder "sequelize")
         (js-invoke
@@ -257,8 +257,8 @@
          (fn [txn]
            (db/find-or-create
             builder
-            "text"
-            {:text "blah"}
+            "string"
+            {:string "blah"}
             (fn []
               (js/console.log "FINISHED RANS"))
             txn))))
@@ -270,66 +270,66 @@
        (fn on-complete [] (txn-query-iterator txn txn-fn (rest args))))))
 
   
-  (doseq [symbol-text-pairs content-props]
-    (println "     \\__,> " symbol-text-pairs)
-    (let [content-state (atom {:n-waiting (count symbol-text-pairs)
+  (doseq [symbol-string-pairs content-props]
+    (println "     \\__,> " symbol-string-pairs)
+    (let [content-state (atom {:n-waiting (count symbol-string-pairs)
                                :properties []})]
-      (doseq [[symbol text] symbol-text-pairs]
+      (doseq [[symbol string] symbol-string-pairs]
         (let [property-state (atom {:symbol-id nil
-                                    :text-id nil})
+                                    :string-id nil})
               carrier-data {:property-state property-state
                             :content-state content-state}]
-            
+          
           (create-symbol! builder symbol carrier-data)
-          (create-text! builder text carrier-data)))))
+          (create-string! builder string carrier-data)))))
 
   #_(db/run-in-transaction!
      builder
      (fn [txn]
        (js/console.log "start transaction")
 
-       #_(doseq [symbol-text-pairs (take 1 content-props)]
-           (let [content-state (atom {:n-waiting (count symbol-text-pairs)
+       #_(doseq [symbol-string-pairs (take 1 content-props)]
+           (let [content-state (atom {:n-waiting (count symbol-string-pairs)
                                       :properties []})]
-             (doseq [[symbol text] (take 1 symbol-text-pairs)]
+             (doseq [[symbol string] (take 1 symbol-string-pairs)]
                (let [property-state (atom {:symbol-id nil
-                                           :text-id nil})
+                                           :string-id nil})
                      carrier-data {:property-state property-state
                                    :content-state content-state}]))))
 
        (println "=================")
-       (doseq [symbol-text-pairs content-props]
+       (doseq [symbol-string-pairs content-props]
          (println "---------------->")
-         (println symbol-text-pairs))
+         (println symbol-string-pairs))
 
-     
+       
 
        #_(->> content-props
               (txn-query-iterator
                txn
-               (fn [txn symbol-text-pairs on-complete]
-                 #_(db/find-or-create builder "text" {:text text} on-complete txn)
+               (fn [txn symbol-string-pairs on-complete]
+                 #_(db/find-or-create builder "string" {:string string} on-complete txn)
 
-                 ;;[txn text on-complete]
-                 (let [content-state (atom {:n-waiting (count symbol-text-pairs)
+                 ;;[txn string on-complete]
+                 (let [content-state (atom {:n-waiting (count symbol-string-pairs)
                                             :properties []})]
-          
+                   
                    (let [property-state (atom {:symbol-id nil
-                                               :text-id nil})
+                                               :string-id nil})
                          carrier-data {:property-state property-state
                                        :content-state content-state}]
-           
-                     (js/console.log "dumb shit" (str symbol-text-pairs))
-                     (->> symbol-text-pairs
+                     
+                     (js/console.log "dumb shit" (str symbol-string-pairs))
+                     (->> symbol-string-pairs
                           (txn-query-iterator
                            txn
-                           (fn [txn [symbol text] on-complete]
-                             (js/console.log " ============ create text!!!" (str symbol) " -- " (str text))
+                           (fn [txn [symbol string] on-complete]
+                             (js/console.log " ============ create string!!!" (str symbol) " -- " (str string))
                              ;; (create-symbol! builder symbol carrier-data)
-                             ;; (create-text! builder text carrier-data txn)
+                             ;; (create-string! builder string carrier-data txn)
                              (db/find-or-create
-                              builder "text"
-                              {:text text}
+                              builder "string"
+                              {:string string}
                               (fn [record]
                                 (fire-created-event! "symbol" (assoc carrier-data :symbol-id (rand-int 9999)))
                                 (on-complete))
@@ -347,15 +347,15 @@
                       (js/console.log "done with your stupid " (count promises) " promises.")))))
 
        #_(->> content-props
-              (mapv (fn [symbol-text-pairs]
-                      (->> symbol-text-pairs
-                           (mapv (fn [[symbol text]]
+              (mapv (fn [symbol-string-pairs]
+                      (->> symbol-string-pairs
+                           (mapv (fn [[symbol string]]
                                    (js/console.log
-                                    (str "SYMBOL: " symbol " // text: " text))
-                                   (-> (aget builder "models" "text")
+                                    (str "SYMBOL: " symbol " // string: " string))
+                                   (-> (aget builder "models" "string")
                                        (js-invoke
                                         "findOrCreate"
-                                        (clj->js {:where {:text text}
+                                        (clj->js {:where {:string string}
                                                   :transaction txn}))
                                        (js-invoke
                                         "spread"
@@ -365,21 +365,21 @@
               (apply concat)
               (run-all-promises))
 
-       #_(let [symbol-text-pairs (take 1 content-props)
-               content-state (atom {:n-waiting (count symbol-text-pairs)
+       #_(let [symbol-string-pairs (take 1 content-props)
+               content-state (atom {:n-waiting (count symbol-string-pairs)
                                     :properties []})
                ]
-       
+           
            (let [property-state (atom {:symbol-id nil
-                                       :text-id nil})
+                                       :string-id nil})
                  carrier-data {:property-state property-state
                                :content-state content-state}]
              #_(-> js/Promise
                    (.all
-                    (->> symbol-text-pairs
+                    (->> symbol-string-pairs
                          (map
-                          (fn [[symbol text]]
-                            (create-text! builder text carrier-data txn)))
+                          (fn [[symbol string]]
+                            (create-string! builder string carrier-data txn)))
                          (clj->js)))
                    (.then
                     (fn []
@@ -388,52 +388,52 @@
 
            #_(txn-query-iterator
               txn
-              (fn [txn text on-complete]
-                #_(db/find-or-create builder "text" {:text text} on-complete txn)
+              (fn [txn string on-complete]
+                #_(db/find-or-create builder "string" {:string string} on-complete txn)
 
-                ;;[txn text on-complete]
+                ;;[txn string on-complete]
                 (let [property-state (atom {:symbol-id nil
-                                            :text-id nil})
+                                            :string-id nil})
                       carrier-data {:property-state property-state
                                     :content-state content-state}]
-          
+                  
                   ;; (create-symbol! builder symbol carrier-data)
-                  ;; (create-text! builder text carrier-data txn)
+                  ;; (create-string! builder string carrier-data txn)
                   (db/find-or-create
-                   builder "text"
-                   {:text text}
+                   builder "string"
+                   {:string string}
                    (fn [record]
                      (fire-created-event! "symbol" (assoc carrier-data :symbol-id (rand-int 9999)))
                      (on-complete))
                    txn)
 
-                  ;; (js/console.log " ============ create text!!!" (str symbol) " -- " (str text))
+                  ;; (js/console.log " ============ create string!!!" (str symbol) " -- " (str string))
 
-          
+                  
                   )
-        
+                
                 )
               ["blah1" "blah2" "blah3"]))
-     
-       #_(doseq [symbol-text-pairs (take 1 content-props)]
+       
+       #_(doseq [symbol-string-pairs (take 1 content-props)]
            ;; (println "---> content props // " (count remain-cp))
            ;; (println remain-cp)
-           (println "     \\__,> " symbol-text-pairs)
-           (let [content-state (atom {:n-waiting (count symbol-text-pairs)
+           (println "     \\__,> " symbol-string-pairs)
+           (let [content-state (atom {:n-waiting (count symbol-string-pairs)
                                       :properties []})]
-             (doseq [[symbol text] (take 1 symbol-text-pairs)]
+             (doseq [[symbol string] (take 1 symbol-string-pairs)]
                (let [property-state (atom {:symbol-id nil
-                                           :text-id nil})
+                                           :string-id nil})
                      carrier-data {:property-state property-state
                                    :content-state content-state}]
-             
+                 
                  ;; (create-symbol! builder symbol carrier-data)
 
-                 (js/console.log " ============ create text!!!" (str symbol) " -- " (str text))
+                 (js/console.log " ============ create string!!!" (str symbol) " -- " (str string))
 
-                 ;; (create-text! builder text carrier-data txn)
-             
-             
+                 ;; (create-string! builder string carrier-data txn)
+                 
+                 
                  )))
 
            )
@@ -473,18 +473,18 @@
                                        (iterate-remain-content-props
                                         (rest remain-content-props)))))
                           
-                          (let [[symbol text] (first remain-props)
+                          (let [[symbol string] (first remain-props)
                                 new-symbol (atom nil)
-                                new-text (atom nil)]
+                                new-string (atom nil)]
                             (-> (promesa/do!
                                  (db/find-or-create builder "symbol" {:symbol symbol} (partial reset! new-symbol))
-                                 (db/find-or-create builder "text" {:text text} (partial reset! new-text)))
+                                 (db/find-or-create builder "string" {:string string} (partial reset! new-string)))
                                 (promesa/then
                                  (fn []
                                    (db/find-or-create
                                     builder "property"
                                     {:symbolId (:id @new-symbol)
-                                     :textId (:id @new-text)}
+                                     :stringId (:id @new-string)}
                                     ;; unclear why this changes behavior, but it fails with
                                     ;;   UnhandledPromiseRejectionWarning: SequelizeUniqueConstraintError: Validation error
                                     ;; when run without a runnable callback
