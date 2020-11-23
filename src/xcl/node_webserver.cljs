@@ -1,9 +1,9 @@
 (ns xcl.node-webserver
   (:require
    ["express" :as express]
+   ["jayson" :as jayson]
    ["cors" :as cors]
-   ["body-parser" :as body-parser]
-   ["multitransport-jsonrpc" :as jsonrpc]
+   ["body-parser" :rename {json json-parser}]
    [xcl.common :refer [get-file-extension]]
    
    ;; from test.cljs
@@ -27,6 +27,7 @@
    [xcl.env :as env]))
 
 (def $JSONRPC-PORT (env/get :jsonrpc-port))
+(def $XCL-NO-CACHE "xcl-no-cache")
 
 (def $resource-resolver-loader-mapping
   (atom {:calibre-file
@@ -115,37 +116,46 @@
        (map (fn [[method-key original-handler]]
               (cache-log "wrapping request cache for " method-key)
               [method-key
-               (fn [args original-callback]
-                 (let [cache-key (pr-str args)
-                       maybe-cached-response (@$request-cache cache-key)]
-                   (cache-log "checking cache key: " cache-key)
-                   (if-not (empty? maybe-cached-response)
-                     (do
-                       (cache-log (console/green "returning cached response for " cache-key))
-                       (apply original-callback maybe-cached-response))
-                     (do
-                       (cache-log (console/red "running original handler for " cache-key))
-                       (original-handler
-                        args
-                        (fn wrapped-callback [err-response ok-response]
-                          (cache-log (console/yellow "caching response for " cache-key))
-                          (swap! $request-cache
-                                 assoc cache-key [err-response ok-response])
-                          (original-callback err-response ok-response)))))))]))
+               (fn [args context original-callback]
+                 
+                 (if (some->> (aget context "headers" $XCL-NO-CACHE)
+                              (clojure.string/lower-case)
+                              (#{"yes" "true" "1"}))
+                   (do
+                     (cache-log (console/red (str "bypassing cache for " args)))
+                     (original-handler args context original-callback))
+                   
+                   (let [cache-key (pr-str args)
+                         maybe-cached-response (@$request-cache cache-key)]
+                     (cache-log "checking cache key: " cache-key)
+                     (if-not (empty? maybe-cached-response)
+                       (do
+                         (cache-log (console/green "returning cached response for " cache-key))
+                         (apply original-callback maybe-cached-response))
+                       (do
+                         (cache-log (console/red "running original handler for " cache-key))
+                         (original-handler
+                          args
+                          context
+                          (fn wrapped-callback [err-response ok-response]
+                            (cache-log (console/yellow "caching response for " cache-key))
+                            (swap! $request-cache
+                                   assoc cache-key [err-response ok-response])
+                            (original-callback err-response ok-response))))))))]))
        (into {})))
 
 ;;add jsonrpc request cache wrapper fn
 (def $handler-mapping
   (wrap-cached
-   {:echo (fn [args callback]
+   {:echo (fn [args context callback]
             (println (js->clj args :keywordize-keys true))
             (-> args (js->clj) (println))
             (callback nil args))
   
-    :get-text (fn [args callback]
+    :get-text (fn [args context callback]
                 (let [{:keys [protocol directive]}
                       (js->clj args :keywordize-keys true)]
-                
+
                   ((case protocol
 
                      ("file" "xcl")
@@ -187,6 +197,7 @@
                              gra (-> resource-spec
                                      (:link)
                                      (git/parse-git-protocol-blob-path))]
+                         
                          (git/resolve-git-resource-address
                           gra
                           (fn [full-content]
@@ -243,28 +254,28 @@
                 (complete-request resolved-path))))
     }))
 
+
+
 (defn start-server! []
+  ;; ref https://github.com/tedeh/jayson#server-cors
   (let [app (express)
-        JrpcServer (aget jsonrpc "server")
-        ServerMiddleware (aget jsonrpc
-                               "transports"
-                               "server"
-                               "middleware")]
+        server (-> jayson
+                   (.server (clj->js $handler-mapping)
+                            #js {"useContext" true}))]
+    
     (doto app
       (.use (cors))
-      (.use (js-invoke body-parser "json"))
-      (.use (env/get :jsonrpc-endpoint)
-            (aget (JrpcServer.
-                   (ServerMiddleware.)
-                   (clj->js $handler-mapping))
-                  "transport"
-                  "middleware"))
-      (.listen $JSONRPC-PORT
-               (fn []
-                 (js/console.log
-                  (str "starting rpc server on port "
-                       $JSONRPC-PORT
-                       "...")))))))
+      (.use (json-parser))
+      (.use (fn [req res next]
+              ;; ref https://github.com/tedeh/jayson#server-context
+              (let [context #js {"headers" (aget req "headers")}]
+                (.call server
+                       (aget req "body")
+                       context
+                       (fn [err result]
+                         (when err (next err))
+                         (.send res (or result #js {})))))))
+      (.listen $JSONRPC-PORT))))
 
 (defn -main []
   (start-server!))
