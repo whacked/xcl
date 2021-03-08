@@ -10,6 +10,7 @@ stdenv.mkDerivation rec {
         watchexec
     ];
     shellHook = ''
-        export PATH=$PATH:$(npm bin)
+        export PATH=$(npm bin):$PATH
+        npm run
     '';
 }

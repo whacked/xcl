@@ -1,4 +1,10 @@
 {
+  "scripts": {
+      "watch": "shadow-cljs watch node-test",
+      "watch-web": "shadow-cljs watch node-webserver",
+      "build-lib": "shadow-cljs release lib-sample",
+      "build-web": "shadow-cljs release node-webserver"
+  },
   "dependencies": {
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
