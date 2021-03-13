@@ -8,9 +8,12 @@ stdenv.mkDerivation rec {
     buildInputs = [
         nodejs-10_x
         watchexec
+        sqlite
     ];
     shellHook = ''
-        export PATH=$(npm bin):$PATH
-        npm run
+        export PATH=$PATH:$(npm bin)
+        if ! (command -v shadow-cljs &>/dev/null); then
+            npm install
+        fi
     '';
 }
