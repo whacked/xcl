@@ -13,7 +13,8 @@
   [metosin/spec-tools "0.10.3"]
   [com.taoensso/timbre "4.10.0"]
   [macchiato/core "0.2.16"]
-  [reagent "0.8.1"]]
+  [reagent "0.8.1"]
+  [hiccups "0.3.0"]]
 
  ;; connect to the cljs repl from cider:
  ;; (shadow.cljs.devtools.api/nrepl-select :browser-sample)
