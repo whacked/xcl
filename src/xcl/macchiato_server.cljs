@@ -334,15 +334,7 @@
       (.on "connection"
            (fn [socket]
              (js/console.log "got connection")
-             
-             ^js/Object
-             (.on socket
-                  signaling/$search-text
-                  (fn [message]
-                    (textsearch/search
-                     (aget message "text")
-                     (fn [results]
-                       (.emit socket-server signaling/$search-text results))))))))))
+             (signaling/bind-jsonrpc-processors! socket))))))
 
 (def $bootstrap-data? true)
 (defn -main []
@@ -382,7 +374,7 @@
                       (db/run-sql! builder insert-query)
                       (iter-create-seed-data! (rest remain))))))]
            (iter-create-seed-data! tables)))))
-
+  
   (let [express-server (setup-server)
         socket-server (setup-socket-server express-server)
         
@@ -391,12 +383,22 @@
 
         emit-status
         (fn [clj-payload]
-          (js/console.log (pr-str clj-payload))
           (send-message
            signaling/$chokidar-status-update-topic
            (assoc clj-payload
                   :time (-> (new js/Date)
                             (.getTime)))))]
+    
+    (signaling/add-jsonrpc-handler
+     signaling/$search-text
+     (fn [clj-payload]
+       (prn clj-payload)
+       (textsearch/search
+        (:text clj-payload)
+        (fn [results]
+          (send-message
+           signaling/$search-text
+           results)))))
     
     (let [base-dir (.cwd js/process)
           paths [(.join path base-dir "src/xcl/indexer")

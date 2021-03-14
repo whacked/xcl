@@ -72,32 +72,33 @@
 (defn setup-ui! []
   (let [sio-client (sio)
         send-message (signaling/make-message-sender sio-client)]
-    (doto sio-client
-      (.on
-       signaling/$chokidar-status-update-topic
-       (fn [js-prop]
-         (let [clj-payload (js->clj js-prop :keywordize-keys true)]
-           (swap! $state update-in [:chokidar-history]
-                  (fn [current-history]
-                    (conj current-history clj-payload))))))
-      
-      (.on
-       signaling/$cache-status-update-topic
-       (fn [js-prop]
-         (let [clj-payload (js->clj js-prop :keywordize-keys true)]
-           (swap! $state update-in [:cache-history]
-                  (fn [current-history]
-                    (conj current-history clj-payload))))))
 
-      (.on
-       signaling/$search-text
-       (fn [js-results]
-         (let [clj-payload (js->clj js-results :keywordize-keys true)]
-           (swap! $state assoc-in [:search-results] clj-payload))))
-      
+    (signaling/add-jsonrpc-handler
+     signaling/$chokidar-status-update-topic
+     (fn [clj-payload]
+       (js/console.log "chokidar update!")
+       (swap! $state update-in [:chokidar-history]
+              (fn [current-history]
+                (conj current-history clj-payload)))))
+    
+    (signaling/add-jsonrpc-handler
+     signaling/$cache-status-update-topic
+     (fn [clj-payload]
+       (js/console.log "status update!")
+       (swap! $state update-in [:cache-history]
+              (fn [current-history]
+                (conj current-history clj-payload)))))
+    
+    (signaling/add-jsonrpc-handler
+     signaling/$search-text
+     (fn [clj-payload]
+       (swap! $state assoc-in [:search-results] clj-payload)))
+
+    (doto sio-client
       (.on "disconnect"
            (fn [socket]
-             (js/console.log "disconnected"))))
+             (js/console.log "disconnected")))
+      (signaling/bind-jsonrpc-processors!))
     
     (rdom/render
      (let [my-state (r/atom {})]
