@@ -18,7 +18,8 @@
   [org.clojure/data.json "1.0.0"]
   [prismatic/schema "1.1.12"]
   [reagent "1.0.0"]
-  [rum "0.12.3"]]
+  [rum "0.12.3"]
+  [stylefy "2.2.1"]]
 
  ;; connect to the cljs repl from cider:
  ;; (shadow.cljs.devtools.api/nrepl-select :browser-sample)
@@ -69,6 +70,13 @@
                   :modules
                   {:crud-main
                    {:entries [xcl.model-crud-frontend]}}
-
                   :build-hooks [(shadow-env.core/hook)]}
+
+  :indexer-frontend {:target :browser
+                     :output-to "public/js"
+                     :asset-path "."
+                     :modules
+                     {:crud-main
+                      {:entries [xcl.indexer.frontend]}}
+                     :build-hooks [(shadow-env.core/hook)]}
   }}

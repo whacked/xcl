@@ -20,7 +20,11 @@
    [cljs.reader]
    [promesa.core :as promesa]
    [xcl.seed-data-loader]
-   ))
+   [xcl.indexer.engine :as indexer]
+   [garden.core :refer [css]]
+   ["socket.io" :as socketio]
+   [xcl.indexer.signaling :as signaling]
+   [xcl.textsearch.engine :as textsearch]))
 
 (def $working-dir (.cwd js/process))
 (def $shadow-config
@@ -176,7 +180,8 @@
                            {:content "utf-8"
                             :http-equiv "encoding"}]
                           [:style
-                           "* { margin: 0; padding: 0; }"]
+                           (css [:* {:margin 0
+                                     :padding 0}])]
                           (->> ["tabulator-tables/dist/css/tabulator.min.css"
                                 "react-tabulator/lib/styles.css"
                                 "react-tabs/style/react-tabs.css"]
@@ -240,7 +245,49 @@
                                 :else
                                 (-> {:status 400
                                      :body "unsupported request"}
-                                    (respond)))))}}]]])
+                                    (respond)))))}}]]
+   
+   ["/"
+    {:get {:handler (fn [request respond _]
+                      (-> $routes
+                          (routes-to-help)
+                          (respond)))}}]
+
+   ["/indexer"
+    [""
+     {:get {:handler (fn [request respond _]
+                       (->
+                        [:html
+                         [:head
+                          [:meta
+                           {:content "text/html;charset=utf-8"
+                            :http-equiv "Content-Type"}]
+                          [:meta
+                           {:content "utf-8"
+                            :http-equiv "encoding"}]
+                          (->> ["tabulator-tables/dist/css/tabulator.min.css"
+                                "react-tabulator/lib/styles.css"
+                                "react-tabs/style/react-tabs.css"]
+                               (map (fn [css-path]
+                                      [:link
+                                       {:rel "stylesheet"
+                                        :href (str "/" $css-loader-endpoint "/" css-path)}])))
+                          [:style
+                           (css [:* {:margin 0
+                                     :padding 0}])]]
+                         [:body
+                          [:div
+                           [:h1 "indexer"]]
+                          [:div {:id "main"}]
+                          [:script
+                           {:type "text/javascript"
+                            :src (str "/" $js-loader-endpoint
+                                      "/" (name $crud-frontend-main-module) ".js")}]]]
+                        (h/html5)
+                        (plain-text)
+                        (assoc-in [:headers :content-type]
+                                  "text/html")
+                        (respond)))}}]]])
 
 (defn wrap-body-to-params
   [handler]
@@ -269,18 +316,33 @@
   (callback {:status 200
              :body "hello macchiato"}))
 
-(defn server []
+(defn setup-server []
   (info "starting server")
   (let [host "127.0.0.1"
         port 3000]
     (http/start
-      {:handler app  ;; example-handler
-       :host    host
-       :port    port
-       :on-success (fn [& args]
-                     (info "macchiato started"))})))
+     {:handler app ;; example-handler
+      :host    host
+      :port    port
+      :on-success (fn [& args]
+                    (info "macchiato started"))})))
 
-
+(defn setup-socket-server [express-server]
+  (let [socket-server
+        (socketio express-server)]
+    (doto socket-server
+      (.on "connection"
+           (fn [socket]
+             (js/console.log "got connection")
+             
+             ^js/Object
+             (.on socket
+                  signaling/$search-text
+                  (fn [message]
+                    (textsearch/search
+                     (aget message "text")
+                     (fn [results]
+                       (.emit socket-server signaling/$search-text results))))))))))
 
 (def $bootstrap-data? true)
 (defn -main []
@@ -292,34 +354,79 @@
                     (apply str (take 50 (repeat "="))))))
 
 
-  (db/initialize-database!
-   db/$default-settings
-   (fn [builder]
+  #_(db/initialize-database!
+     db/$default-settings
+     (fn [builder]
      
-     (if $bootstrap-data?
+       (if $bootstrap-data?
        
-       (xcl.seed-data-loader/bootstrap-from-content-props!
-        @db/$builder (:content-props xcl.seed-data-loader/example-data-input))
+         (xcl.seed-data-loader/bootstrap-from-content-props!
+          @db/$builder (:content-props xcl.seed-data-loader/example-data-input))
 
-       (let [tables
-             ;; specify order explicitly to avoid contention from table dependency
-             ["symbol" "text"
-              "property"
-              "content"
-              "content__property"]
+         (let [tables
+               ;; specify order explicitly to avoid contention from table dependency
+               ["symbol" "text"
+                "property"
+                "content"
+                "content__property"]
              
-             iter-create-seed-data!
-             (fn iter-create-seed-data! [remain]
-               (when (seq remain)
-                 (let [table-name (first remain)
-                       seed-data (xcl.seed-data-loader/example-seed-data table-name)
-                       insert-query
-                       (db/generate-insert-query
-                        builder table-name seed-data)]
-                   (promesa/do!
-                    (db/run-sql! builder insert-query)
-                    (iter-create-seed-data! (rest remain))))))]
-         (iter-create-seed-data! tables)))))
-  
-  (server)
-  )
+               iter-create-seed-data!
+               (fn iter-create-seed-data! [remain]
+                 (when (seq remain)
+                   (let [table-name (first remain)
+                         seed-data (xcl.seed-data-loader/example-seed-data table-name)
+                         insert-query
+                         (db/generate-insert-query
+                          builder table-name seed-data)]
+                     (promesa/do!
+                      (db/run-sql! builder insert-query)
+                      (iter-create-seed-data! (rest remain))))))]
+           (iter-create-seed-data! tables)))))
+
+  (let [express-server (setup-server)
+        socket-server (setup-socket-server express-server)
+        
+        send-message
+        (signaling/make-message-sender socket-server)
+
+        emit-status
+        (fn [clj-payload]
+          (js/console.log (pr-str clj-payload))
+          (send-message
+           signaling/$chokidar-status-update-topic
+           (assoc clj-payload
+                  :time (-> (new js/Date)
+                            (.getTime)))))]
+    
+    (let [base-dir (.cwd js/process)
+          paths [(.join path base-dir "src/xcl/indexer")
+                 "/tmp/foofoo/"]]
+      (indexer/initialize-file-watcher
+       paths
+       {signaling/$chokidar-add
+        (fn [path]
+          (emit-status
+           {:op "ADD"
+            :path path}))
+        signaling/$chokidar-change
+        (fn [path]
+          (emit-status
+           {:op "UPD"
+            :path path}))
+        signaling/$chokidar-unlink
+        (fn [path]
+          (emit-status
+           {:op "DEL"
+            :path path}))})
+
+      (js/setTimeout
+       (fn []
+         (indexer/rebuild-file-info-cache!
+          paths
+          (fn [file-info]
+            (info "sending info for file: "
+                  (:filepath file-info))
+            (send-message
+             signaling/$cache-status-update-topic
+             file-info))))
+       2000))))
