@@ -1,9 +1,10 @@
-(ns xcl.node-webserver
+(ns xcl.node-content-server
   (:require
    ["express" :as express]
    ["jayson" :as jayson]
    ["cors" :as cors]
    ["body-parser" :rename {json json-parser}]
+   ["node-ipc" :as node-ipc]
    [xcl.common :refer [get-file-extension]]
    
    ;; from test.cljs
@@ -28,6 +29,7 @@
 
 (def $JSONRPC-PORT (env/get :jsonrpc-port))
 (def $XCL-NO-CACHE "xcl-no-cache")
+(def $XCL-SERVER-ID "xcl-server")
 
 (def $resource-resolver-loader-mapping
   (atom {:calibre-file
@@ -146,6 +148,10 @@
 
 ;;add jsonrpc request cache wrapper fn
 (def $handler-mapping
+  ;; see https://github.com/tedeh/jayson#client-callback-syntactic-sugar
+  ;; on callback structure; in short:
+  ;; (callback Error Result)
+
   (wrap-cached
    {:echo (fn [args context callback]
             (println (js->clj args :keywordize-keys true))
@@ -256,7 +262,7 @@
 
 
 
-(defn start-server! []
+(defn start-server! [jsonrpc-port]
   ;; ref https://github.com/tedeh/jayson#server-cors
   (let [app (express)
         server (-> jayson
@@ -275,7 +281,66 @@
                        (fn [err result]
                          (when err (next err))
                          (.send res (or result #js {})))))))
-      (.listen $JSONRPC-PORT))))
+      (.listen jsonrpc-port))))
+
+(defn start-socket-server! [ipc-server-id]
+  ;; DEBUGGING:
+  ;; ref https://superuser.com/a/576404
+  ;; mv /tmp/app.xcl-server /tmp/app.xcl-server.orig
+  ;; socat -t100 -x -v UNIX-LISTEN:/tmp/app.xcl-server,mode=777,reuseaddr,fork UNIX-CONNECT:/tmp/app.xcl-server.orig
+  ;; mv /tmp/app.xcl-server.orig /tmp/app.xcl-server
+  
+  (let [get-server (fn [] (aget node-ipc "server"))]
+    (aset node-ipc "config" "id" ipc-server-id)
+    (aset node-ipc "config" "retry" 1500)
+    (.serve
+     node-ipc
+     (fn []
+       (doto ^js/Object (get-server)
+         (.on "jsonrpc"
+              (fn [data socket]
+                (js/console.log "jsonrpc payload" data)
+                (if-let [handler (-> (aget data "method")
+                                     (keyword)
+                                     ($handler-mapping))]
+                  (let [fake-http-request-context #js {:headers {}}
+                        respond
+                        (fn respond [_error_ success-js-payload]
+                          ^js/Object
+                          (.emit (get-server) socket "jsonrpc" success-js-payload))]
+                    (handler (aget data "params")
+                             fake-http-request-context
+                             respond))
+
+                  (js/console.error "no handler for this payload")))))))
+    
+    (-> (get-server)
+        (.start))))
 
 (defn -main []
-  (start-server!))
+  (let [cmd-line-arguments (aget js/process "argv")
+        _node-bin-path (first cmd-line-arguments)
+        _node-script-path (second cmd-line-arguments)
+        cli-argument-map (->> (drop 2 (js->clj cmd-line-arguments))
+                              (partition 2)
+                              (map vec)
+                              (into {}))]
+    (or
+     (when-let [bind-target (cli-argument-map "--bind")]
+       (cond (re-find #"^\d+$" bind-target)
+             (do
+               (js/console.log "setting jsonrpc server port to"
+                               bind-target)
+               (start-server! (js/parseInt bind-target)))
+            
+             (= bind-target "socket")
+             (do
+               (js/console.log "attempting to start ipc socket server")
+               (start-socket-server! $XCL-SERVER-ID))
+
+             :else nil))
+
+     (do
+       (js/console.log "using default jsonrpc server port"
+                       $JSONRPC-PORT)
+       (start-server! $JSONRPC-PORT)))))
