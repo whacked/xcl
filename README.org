@@ -127,18 +127,18 @@
 
     =M-x cider-connect-cljs=
 
-** webserver + reload with watchexec
+** socket / web server + reload with watchexec
 
    in one terminal
 
    #+BEGIN_SRC sh
-   shadow-cljs watch node-webserver
+   shadow-cljs watch node-content-server
    #+END_SRC
 
    in another terminal
 
    #+BEGIN_SRC sh
-   watchexec --restart --no-ignore --watch ./build node build/webserver.js
+   watchexec --restart --no-ignore --watch ./build node build/node-content-server.js
    #+END_SRC
    
 * building for node.js

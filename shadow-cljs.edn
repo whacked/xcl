@@ -54,10 +54,10 @@
                 :render
                 xcl.node-interop/render}}
 
-  :node-webserver {:target :node-script
-                   :output-to "build/webserver.js"
-                   :build-hooks [(shadow-env.core/hook)]
-                   :main xcl.node-webserver/-main}
+  :node-content-server {:target :node-script
+                        :output-to "build/node-content-server.js"
+                        :build-hooks [(shadow-env.core/hook)]
+                        :main xcl.node-content-server/-main}
 
   :macchiato {:target :node-script
               :output-to "build/macchiato-server.js"

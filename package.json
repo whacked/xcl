@@ -1,9 +1,9 @@
 {
   "scripts": {
-    "watch": "shadow-cljs watch node-test",
-    "watch-web": "shadow-cljs watch node-webserver",
-    "build-lib": "shadow-cljs release lib-sample",
-    "build-web": "shadow-cljs release node-webserver"
+      "watch": "shadow-cljs watch node-test",
+      "watch-xcl": "shadow-cljs watch node-content-server",
+      "build-lib": "shadow-cljs release lib-sample",
+      "build-xcl": "shadow-cljs release node-content-server"
   },
   "dependencies": {
     "body-parser": "^1.19.0",
@@ -26,6 +26,7 @@
     "jsonpath-plus": "^2.0.0",
     "lru": "^3.1.0",
     "multitransport-jsonrpc": "^0.9.11",
+    "node-ipc": "^9.1.4",
     "pdfjs-dist": "^2.4.456",
     "random-bytes": "^1.0.0",
     "react": "^16.12.0",
