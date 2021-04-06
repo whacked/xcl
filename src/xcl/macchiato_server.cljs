@@ -317,15 +317,14 @@
              :body "hello macchiato"}))
 
 (defn setup-server []
-  (info "starting server")
-  (let [host "127.0.0.1"
-        port 3000]
-    (http/start
-     {:handler app ;; example-handler
-      :host    host
-      :port    port
-      :on-success (fn [& args]
-                    (info "macchiato started"))})))
+  (info (str "starting server on port "
+             (env/get :indexer-port)))
+  (http/start
+   {:handler app ;; example-handler
+    :host    (env/get :indexer-host)
+    :port    (env/get :indexer-port)
+    :on-success (fn [& args]
+                  (info "macchiato started"))}))
 
 (defn setup-socket-server [express-server]
   (let [socket-server
