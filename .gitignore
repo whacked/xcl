@@ -39,3 +39,4 @@ package-lock.json
 
 build
 *.sw?
+config.edn

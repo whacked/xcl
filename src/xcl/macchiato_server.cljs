@@ -11,7 +11,9 @@
    [macchiato.middleware.restful-format :as rf]
    [malli.json-schema]
    [xcl.data-model :as model]
-   [xcl.env :as env]
+   ;; compile-time
+   ;; [xcl.env :as env]
+
    ["path" :as path]
    ["fs" :as fs]
    ["chalk" :as chalk]
@@ -33,6 +35,19 @@
        (.join path $working-dir "shadow-cljs.edn")
        "utf-8")
       (cljs.reader/read-string)))
+
+(defn load-edn [file-path]
+  (-> (.readFileSync fs file-path "utf-8")
+      (cljs.reader/read-string)))
+
+(def $config
+  (let [
+        base-dir (.cwd js/process)
+        default-conf (load-edn (.join path base-dir "default-config.edn"))
+        maybe-config-file (.join path base-dir "config.edn")]
+    (merge default-conf
+           (when (.existsSync fs maybe-config-file)
+             (load-edn maybe-config-file)))))
 
 (defn derive-all-routes [routes & [parent-chain]]
   {:pre []}
@@ -318,11 +333,11 @@
 
 (defn setup-server []
   (info (str "starting server on port "
-             (env/get :indexer-port)))
+             (get-in $config [:indexer-port])))
   (http/start
    {:handler app ;; example-handler
-    :host    (env/get :indexer-host)
-    :port    (env/get :indexer-port)
+    :host    (get-in $config [:indexer-host])
+    :port    (get-in $config [:indexer-port])
     :on-success (fn [& args]
                   (info "macchiato started"))}))
 
@@ -399,9 +414,8 @@
            signaling/$search-text
            results)))))
     
-    (let [base-dir (.cwd js/process)
-          paths [(.join path base-dir "src/xcl/indexer")
-                 "/tmp/foofoo/"]]
+    (let [paths (get-in $config [:indexer-paths])]
+      
       (indexer/initialize-file-watcher
        paths
        {signaling/$chokidar-add

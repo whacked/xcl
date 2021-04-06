@@ -7,4 +7,6 @@
  
  :indexer-host "localhost"
  :indexer-port 23121
+ :indexer-paths ["./src/xcl/indexer"
+                 "/tmp/foobar/"]
  }
