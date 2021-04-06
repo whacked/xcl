@@ -7,8 +7,9 @@ stdenv.mkDerivation rec {
     };
     buildInputs = [
         nodejs-10_x
-        watchexec
+        postgresql
         sqlite
+        watchexec
     ];
     shellHook = ''
         export PATH=$PATH:$(npm bin)
