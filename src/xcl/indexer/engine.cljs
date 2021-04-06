@@ -187,47 +187,43 @@
 
 (defn initialize-file-watcher [start-paths event-handlers]
   
-  (let [base-dir (.cwd js/process)
-        paths [(.join node-path base-dir "src/xcl/indexer")
-               "/tmp/foofoo/"]]
+  (when @$global-watcher
+    (.close @$global-watcher))
 
-    (when @$global-watcher
-      (.close @$global-watcher))
+  (reset!
+   $global-watcher
+   (create-new-indexer start-paths event-handlers))
+  
+  ;; (cljs.pprint/pprint @$global-watcher)
 
-    (reset!
-     $global-watcher
-     (create-new-indexer start-paths event-handlers))
-    
-    ;; (cljs.pprint/pprint @$global-watcher)
+  #_(js/setInterval
+     #(do
+        (let [watched
+              (.getWatched @$global-watcher)
+              
+              abspaths
+              (loop [remain-dirs
+                     (array-seq (js/Object.keys watched))
+                     out []]
+                (if (empty? remain-dirs)
+                  out
+                  (let [dir (first remain-dirs)]
+                    (recur (rest remain-dirs)
+                           (concat
+                            out (->> (aget watched dir)
+                                     (array-seq)
+                                     (map (fn [relpath]
+                                            (.join node-path dir relpath)))
+                                     (filter
+                                      (fn [abspath]
+                                        (->> abspath
+                                             (.lstatSync fs)
+                                             (.isDirectory)
+                                             (not))))))))))]
 
-    #_(js/setInterval
-       #(do
-          (let [watched
-                (.getWatched @$global-watcher)
-            
-                abspaths
-                (loop [remain-dirs
-                       (array-seq (js/Object.keys watched))
-                       out []]
-                  (if (empty? remain-dirs)
-                    out
-                    (let [dir (first remain-dirs)]
-                      (recur (rest remain-dirs)
-                             (concat
-                              out (->> (aget watched dir)
-                                       (array-seq)
-                                       (map (fn [relpath]
-                                              (.join node-path dir relpath)))
-                                       (filter
-                                        (fn [abspath]
-                                          (->> abspath
-                                               (.lstatSync fs)
-                                               (.isDirectory)
-                                               (not))))))))))]
-
-            (js/console.log (new js/Date))
-            (rebuild-file-info-cache! abspaths)
-            ))
+          (js/console.log (new js/Date))
+          (rebuild-file-info-cache! abspaths)
+          ))
      
-       1000)
-    ))
+     1000)
+  )
