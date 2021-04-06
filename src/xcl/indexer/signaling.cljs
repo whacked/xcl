@@ -1,6 +1,5 @@
 (ns xcl.indexer.signaling
-  (:require ["jayson" :as jayson]
-            ["jayson/lib/generateRequest"
+  (:require ["jayson/lib/generateRequest"
              ;; see https://github.com/tedeh/jayson/blob/master/lib/generateRequest.js
              :as jayson-generateRequest]
             [taoensso.timbre :refer [info debug warn error]]))

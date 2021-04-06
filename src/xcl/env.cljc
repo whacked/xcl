@@ -1,26 +1,47 @@
 (ns xcl.env
   (:refer-clojure :exclude [get])
   (:require [shadow-env.core :as env]
-            #?(:clj [clojure.edn :refer [read-string]])))
+            #?(:clj [clojure.edn :refer [read-string]])
+            
+            #?(:cljs ["fs" :as fs])
+            #?(:cljs ["path" :as path])
+            #?(:cljs [cljs.reader :refer [read-string]])))
+
+(defn load-edn [file-path]
+  #?(:clj
+     (-> file-path
+         (slurp)
+         (read-string)))
+  #?(:cljs
+     (-> (.readFileSync fs file-path "utf-8")
+         (cljs.reader/read-string))))
+
+(def $config
+  #?(:clj
+     (let [default-conf (-> (clojure.java.io/file
+                             (System/getProperty "user.dir")
+                             "default-config.edn")
+                            (load-edn))
+           maybe-config-file (clojure.java.io/file
+                              (System/getProperty "user.dir")
+                              "config.edn")]
+       (merge default-conf
+              (when (.exists maybe-config-file)
+                (load-edn maybe-config-file)))))
+  #?(:cljs
+     (let [base-dir (.cwd js/process)
+           default-conf (load-edn (.join path base-dir "default-config.edn"))
+           maybe-config-file (.join path base-dir "config.edn")]
+       (merge default-conf
+              (when (.existsSync fs maybe-config-file)
+                (load-edn maybe-config-file))))))
 
 ;; write a Clojure function that returns variables to expose to :clj and :cljs.
 ;; the function must accept one variable, the shadow-cljs build-state
 ;; (which will be `nil` initially, before compile starts)
 #?(:clj
    (defn read-env [build-state]
-     (let [default-conf (-> (clojure.java.io/file
-                             (System/getProperty "user.dir")
-                             "default-config.edn")
-                            (slurp)
-                            (read-string))
-           maybe-config-file (clojure.java.io/file
-                              (System/getProperty "user.dir")
-                              "config.edn")
-           config-data (merge default-conf
-                              (when (.exists maybe-config-file)
-                                (-> maybe-config-file
-                                    (slurp)
-                                    (read-string))))
+     (let [config-data $config
            out {:common {:user.dir (System/getProperty "user.dir")}
                 :clj    {}
                 :cljs   config-data}]

@@ -11,8 +11,8 @@
    [macchiato.middleware.restful-format :as rf]
    [malli.json-schema]
    [xcl.data-model :as model]
-   ;; compile-time
-   ;; [xcl.env :as env]
+   ;; NOTE env/get is compile-time
+   [xcl.env :as env :refer [$config]]
 
    ["path" :as path]
    ["fs" :as fs]
@@ -35,19 +35,6 @@
        (.join path $working-dir "shadow-cljs.edn")
        "utf-8")
       (cljs.reader/read-string)))
-
-(defn load-edn [file-path]
-  (-> (.readFileSync fs file-path "utf-8")
-      (cljs.reader/read-string)))
-
-(def $config
-  (let [
-        base-dir (.cwd js/process)
-        default-conf (load-edn (.join path base-dir "default-config.edn"))
-        maybe-config-file (.join path base-dir "config.edn")]
-    (merge default-conf
-           (when (.existsSync fs maybe-config-file)
-             (load-edn maybe-config-file)))))
 
 (defn derive-all-routes [routes & [parent-chain]]
   {:pre []}
