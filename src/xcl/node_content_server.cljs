@@ -25,7 +25,12 @@
    [xcl.zotero-interop :as zotero]
    [xcl.git-interop :as git]
    [xcl.console :as console]
-   [xcl.env :as env]))
+   
+   [xcl.indexer.engine :as indexer]
+   [xcl.textsearch.engine :as textsearch]
+   [xcl.indexer.signaling :as signaling]
+   
+   [xcl.env :as env :refer [$config]]))
 
 (def $JSONRPC-PORT (env/get :jsonrpc-port))
 (def $XCL-NO-CACHE "xcl-no-cache")
@@ -258,9 +263,13 @@
               
                 ;; generic
                 (complete-request resolved-path))))
-    }))
 
-
+    (keyword signaling/$search-text)
+    (fn [js-args context jayson-callback]
+      (textsearch/search
+       (aget js-args "text")
+       (fn [results]
+         (jayson-callback nil results))))}))
 
 (defn start-server! [jsonrpc-port]
   ;; ref https://github.com/tedeh/jayson#server-cors
@@ -343,4 +352,13 @@
      (do
        (js/console.log "using default jsonrpc server port"
                        $JSONRPC-PORT)
-       (start-server! $JSONRPC-PORT)))))
+       (start-server! $JSONRPC-PORT)
+
+       (let [paths (get-in $config [:indexer-paths])]
+         
+         ;; TODO: add file watcher
+         ;;       generalize the watcher+index-updater
+         ;;       to work for macchiato + node + electron
+         ;; see: macchiato-server:main()
+         
+         (indexer/rebuild-file-info-cache! paths))))))
