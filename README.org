@@ -151,3 +151,28 @@
 
   - alice.epub :: http://www.gutenberg.org/ebooks/11
   - tracemonkey.pdf :: https://github.com/mozilla/pdf.js/blob/master/test/pdfs/tracemonkey.pdf
+
+** syntax comparison and support for ={{ ... }}= for inline transclusion
+
+   | provider         | example                                                    | description                         | reference                                      |
+   |------------------+------------------------------------------------------------+-------------------------------------+------------------------------------------------|
+   | mediawiki        | ={{Welcome}}=                                              | template (default) namespace        | https://www.mediawiki.org/wiki/Transclusion    |
+   |                  | ={{:VisualEditor}}=                                        | main article namespace              |                                                |
+   |                  | ={{OtherNamespace:article}}=                               | arbitrary namespace                 |                                                |
+   |                  | ={{/ja}}=                                                  | subpage                             |                                                |
+   | org-transclusion | =#+transclude: [[file:path/to/file.org]] :argument-symbol= | org link syntax                     | https://github.com/nobiot/org-transclusion     |
+   |                  | =[[file:~/org/file.org][My Org Notes]]=                    | whole file                          |                                                |
+   |                  | =[[file:~/org/file.org::*heading]]=                        | heading                             |                                                |
+   |                  | =[[file:~/org/file.org::#custom-id]]=                      | arbitrary target by property        | https://orgmode.org/manual/Internal-Links.html |
+   |                  | =[[file:~/org/file.org::named-resource]]=                  | tables, code blocks, etc            |                                                |
+   |                  | =[[id:uuid]]=                                              | another method for arbitrary target |                                                |
+   | obsidian         | =![[article-or-block-reference]]=                          |                                     |                                                |
+   | multimarkdown    | ={{some-other-file.txt}}=                                  |                                     |                                                |
+
+   all these providers seem to operate with the same assumption on content, that a block reference today is the same as tomorrow.
+
+   this assumption may not always hold, and so the transclusion syntax using the least stable target reference (filename being the least stable) is the least robust against content drift. See doi:10.1145/365024.365117 for relevant work.
+
+   creating document/block-level UUIDs is a logical guard against drift, but trades sub-content identification robustness for content flexibility. It also introduces extra logical overhead of keeping track of the ID bound to the content.
+
+   for inline transclusion, since org-mode already uses double brackets, that leaves us with ={{...}}= as the best-candidate shortest syntax
