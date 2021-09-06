@@ -7,8 +7,6 @@
    ["node-ipc" :as node-ipc]
    [xcl.common :refer [get-file-extension]]
    
-   ;; from test.cljs
-   ["sqlite3" :as sqlite3]
    ["yesql" :as yesql]
    ["fs" :as fs]
    ["path" :as path]
@@ -30,7 +28,8 @@
    [xcl.textsearch.engine :as textsearch]
    [xcl.indexer.signaling :as signaling]
    
-   [xcl.env :as env :refer [$config]]))
+   [xcl.env :as env :refer [$config]]
+   [xcl.sqlite :as sqldb]))
 
 (def $JSONRPC-PORT (env/get :jsonrpc-port))
 (def $XCL-NO-CACHE "xcl-no-cache")
@@ -111,12 +110,31 @@
     (js-invoke
      child-process "exec" open-command)))
 
+
 (def $request-cache (atom {}))
+(when @sqldb/$sqlite-db
+  (sqldb/hydrate-atom-from-db! $request-cache @sqldb/$sqlite-db))
+
 (defn cache-log [& ss]
   (js/console.info
    (apply str
           (console/cyan "[CACHE-CONTROL] ")
           ss)))
+
+(defn load-from-cache [cache-key]
+  (@$request-cache cache-key))
+
+(defn ->json [clj-data]
+  (-> clj-data
+      (clj->js)
+      (js/JSON.stringify)))
+
+(defn save-into-cache! [cache-key data]
+  ;; data should be:
+  ;; [err-response ok-response]
+  ;; which can be fed to an express responder via callback(err, ok)
+  (swap! $request-cache assoc cache-key data)
+  (sqldb/save-kv! cache-key (->json data)))
 
 (defn wrap-cached [req-mapping]
   (->> req-mapping
@@ -132,8 +150,8 @@
                      (cache-log (console/red (str "bypassing cache for " args)))
                      (original-handler args context original-callback))
                    
-                   (let [cache-key (pr-str args)
-                         maybe-cached-response (@$request-cache cache-key)]
+                   (let [cache-key (->json args)
+                         maybe-cached-response (load-from-cache cache-key)]
                      (cache-log "checking cache key: " cache-key)
                      (if-not (empty? maybe-cached-response)
                        (do
@@ -146,8 +164,7 @@
                           context
                           (fn wrapped-callback [err-response ok-response]
                             (cache-log (console/yellow "caching response for " cache-key))
-                            (swap! $request-cache
-                                   assoc cache-key [err-response ok-response])
+                            (save-into-cache! cache-key [err-response ok-response])
                             (original-callback err-response ok-response))))))))]))
        (into {})))
 

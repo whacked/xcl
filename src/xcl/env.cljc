@@ -14,7 +14,7 @@
          (read-string)))
   #?(:cljs
      (-> (.readFileSync fs file-path "utf-8")
-         (cljs.reader/read-string))))
+         (read-string))))
 
 (def $config
   #?(:clj
