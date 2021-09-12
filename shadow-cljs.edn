@@ -52,7 +52,10 @@
                {:getExactTextFromPartialStringMatch
                 xcl.node-interop/get-exact-text-from-partial-string-match
                 :render
-                xcl.node-interop/render}}
+                xcl.node-interop/render
+                :parseLink
+                xcl.node-interop/-parse-link
+                }}
 
   :node-content-server {:target :node-script
                         :output-to "build/node-content-server.js"

@@ -114,6 +114,10 @@
      
       nil)))
 
+(defn -parse-link [link-text]
+  (-> link-text
+      (sc/parse-link)
+      (clj->js)))
 
 (def yaml-loader
   (fn [resource-address callback]

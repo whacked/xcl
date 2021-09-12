@@ -1,9 +1,9 @@
 {
   "scripts": {
-      "watch": "shadow-cljs watch node-test",
-      "watch-xcl": "shadow-cljs watch node-content-server",
-      "build-lib": "shadow-cljs release lib-sample",
-      "build-xcl": "shadow-cljs release node-content-server"
+    "watch": "shadow-cljs watch node-test",
+    "watch-xcl": "shadow-cljs watch node-content-server",
+    "build-lib": "shadow-cljs release lib-sample",
+    "build-xcl": "shadow-cljs release node-content-server"
   },
   "dependencies": {
     "body-parser": "^1.19.0",
