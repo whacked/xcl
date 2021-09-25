@@ -30,7 +30,10 @@
                 (load-edn maybe-config-file)))))
   #?(:cljs
      (let [base-dir (.cwd js/process)
-           default-conf (load-edn (.join path base-dir "default-config.edn"))
+           default-config-candidate-path (.join path base-dir "default-config.edn")
+           default-conf (if (.existsSync fs default-config-candidate-path)
+                          (load-edn default-config-candidate-path)
+                          {:local-storage "xcl-cache.sqlite3"})
            maybe-config-file (.join path base-dir "config.edn")]
        (merge default-conf
               (when (.existsSync fs maybe-config-file)
