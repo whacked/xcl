@@ -39,6 +39,7 @@
 (defrecord GitResourceAddress
     [repo-name oid path content-resolver])
 
+;; subsumed completely by parse-git-protocol-blob-path?
 (defn parse-git-resource-address [git-resource-address]
   (comment
     (parse-git-resource-address "./blob/eb64c0e82c7c/README.org::*also see"))
@@ -78,9 +79,13 @@
            content-resolver]
           (re-matches
            #"(.+?)::(.+)"
-           path-in-repo-with-resolver)]
+           path-in-repo-with-resolver)
+          cleaned-repo-path (if (clojure.string/ends-with? repo-path "/.git")
+                              (subs repo-path 0 (- (count repo-path) 5))
+                              repo-path)]
       (GitResourceAddress.
-       repo-path commit-oid
+       cleaned-repo-path
+       commit-oid
        (or path-in-repo
            path-in-repo-with-resolver)
        content-resolver))))
