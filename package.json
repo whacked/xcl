@@ -38,6 +38,7 @@
     "socket.io": "^4.0.0",
     "socket.io-client": "^4.0.0",
     "sqlite3": "^4.2.0",
+    "string-interp": "^0.3.6",
     "tabulator-tables": "^4.7.1",
     "webpack": "^4.41.5",
     "xregexp": "^4.3.0",

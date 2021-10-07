@@ -1,5 +1,12 @@
 (ns xcl.node-interop
-  (:require [xcl.common :refer [get-file-extension]]
+  (:require ["pdfjs-dist/es5/build/pdf" :as pdfjsLib]
+            ["fs" :as fs]
+            ["path" :as path]
+            ["js-yaml" :as yaml]
+            ["jsonpath-plus" :as JSONPath]
+            
+            [xcl.common :refer [get-file-extension]]
+            [xcl.git-interop :as git]
             [xcl.core :as sc :refer [render-transclusion]]
             [xcl.content-interop :as ci]
             [xcl.external :as ext]
@@ -7,14 +14,14 @@
              :refer [pdfjslib-load-text
                      set-pdfjslib!]
              :as pdfi]
-            ["pdfjs-dist/es5/build/pdf" :as pdfjsLib]
+            [xcl.api-v1 :as api]
             [xcl.node-epub-interop :as epubi]
-            ["fs" :as fs]
-            ["path" :as path]
-            ["js-yaml" :as yaml]
-            ["jsonpath-plus" :as JSONPath]
             [xcl.node-common :refer
-             [path-exists? path-join]]))
+             [path-join path-exists? slurp-file]]
+            [xcl.node-common :refer
+             [path-exists? path-join
+              get-environment-substituted-path]]
+            [xcl.sqlite :as sqldb]))
 
 ;;;;;;;;;;;;;;;
 ;; epub, pdf ;;
@@ -23,7 +30,8 @@
 (ext/register-loader!
  "pdf"
  (fn [resource-address callback]
-   (let [file-name (:resource-resolver-path resource-address)]
+   (let [file-name (get-environment-substituted-path
+                    (:resource-resolver-path resource-address))]
      (if-not file-name
        (js/console.warn (str "NO SUCH FILE: " file-name))
        (let [maybe-page-number-bound
@@ -38,7 +46,8 @@
 (ext/register-loader!
  "epub"
  (fn [resource-address callback]
-   (let [file-name (:resource-resolver-path resource-address)]
+   (let [file-name (get-environment-substituted-path
+                    (:resource-resolver-path resource-address))]
      (if-not file-name
        (js/console.warn (str "NO SUCH FILE: " file-name))
        (let [maybe-page-number-bound
@@ -71,10 +80,11 @@
 (defn get-exact-text-from-partial-string-match
   [file-path match-string on-complete]
   (let [search-tokens (clojure.string/split match-string #"\s+")
-        result (atom nil)]
+        result (atom nil)
+        expanded-path (get-environment-substituted-path file-path)]
     (case (get-file-extension file-path)
       "epub" (epubi/load-and-get-text
-              file-path
+              expanded-path
               nil
               nil
               (fn on-get-section [{:keys [section chapter text]}]
@@ -95,7 +105,7 @@
                 (on-complete (clj->js @result))))
      
       "pdf" (pdfi/process-pdf
-             file-path
+             expanded-path
              (fn on-get-page-text [page-num page-text]
                (let [maybe-matches (sc/find-most-compact-token-matches-in-content
                                     page-text search-tokens)]
@@ -114,14 +124,15 @@
      
       nil)))
 
-(defn -parse-link [link-text]
+(defn parse-link [link-text]
   (-> link-text
       (sc/parse-link)
       (clj->js)))
 
 (def yaml-loader
   (fn [resource-address callback]
-    (let [file-name (:resource-resolver-path resource-address)]
+    (let [file-name (get-environment-substituted-path
+                     (:resource-resolver-path resource-address))]
       (if-not file-name
         (js/console.warn (str "NO SUCH FILE: " file-name))
         (let [source (.readFileSync fs file-name "utf-8")
@@ -140,7 +151,8 @@
 (ext/register-loader!
  "json"
  (fn [resource-address callback]
-   (let [file-name (:resource-resolver-path resource-address)]
+   (let [file-name (get-environment-substituted-path
+                    (:resource-resolver-path resource-address))]
      (if-not file-name
        (js/console.warn (str "NO SUCH FILE: " file-name))
        (let [source (.readFileSync fs file-name "utf-8")

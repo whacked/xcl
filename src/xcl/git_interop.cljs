@@ -8,7 +8,8 @@
             ["jsonpath-plus" :as JSONPath]
             ["isomorphic-git" :as git]
             [xcl.node-common :refer
-             [path-exists? path-join]]))
+             [path-exists? path-join
+              get-environment-substituted-path]]))
 
 (let [git-plugin (aget git "plugins")]
   (js-invoke git-plugin "set""fs" fs))
@@ -80,9 +81,10 @@
           (re-matches
            #"(.+?)::(.+)"
            path-in-repo-with-resolver)
-          cleaned-repo-path (if (clojure.string/ends-with? repo-path "/.git")
-                              (subs repo-path 0 (- (count repo-path) 5))
-                              repo-path)]
+          cleaned-repo-path (-> (if (clojure.string/ends-with? repo-path "/.git")
+                                  (subs repo-path 0 (- (count repo-path) 5))
+                                  repo-path)
+                                (get-environment-substituted-path))]
       (GitResourceAddress.
        cleaned-repo-path
        commit-oid
@@ -93,7 +95,7 @@
 (defn load-repo-file-from-commit [repo-dir path-in-repo commit-oid fn-on-success]
   (-> (.readObject git
                    (clj->js (assoc $base-git-param
-                                   :dir repo-dir
+                                   :dir (get-environment-substituted-path repo-dir)
                                    :oid commit-oid
                                    :filepath path-in-repo)))
       (.then (fn [retrieved-object]
@@ -112,31 +114,33 @@
                                     & [on-failed]]
   {:pre [(instance? GitResourceAddress GRA)]}
   
-  (-> (.log git (clj->js (assoc $base-git-param
-                                :dir repo-dir)))
-      (.then (fn [commits]
-               (loop [remain-commits
-                      (->> commits
-                           (array-seq)
-                           (sort-by (fn [commit]
-                                      (aget commit "author" "timestamp"))))]
+  (let [env-resolved-dir (get-environment-substituted-path
+                          repo-dir)]
+    (-> (.log git (clj->js (assoc $base-git-param
+                                  :dir env-resolved-dir)))
+        (.then (fn [commits]
+                 (loop [remain-commits
+                        (->> commits
+                             (array-seq)
+                             (sort-by (fn [commit]
+                                        (aget commit "author" "timestamp"))))]
                  
-                 (if (empty? remain-commits)
-                   (if on-failed
-                     (on-failed GRA)
-                     (js/console.warn
-                      (str "FAILED TO RESOLVE:\n"
-                           (pr-str GRA))))
-                   (let [commit-description (first remain-commits)
-                         commit-clj-object (js->clj commit-description :keywordize-keys true)
-                         {timestamp :timestamp
-                          tzoffset :timezoneOffset} (-> commit-clj-object (:author))]
-                     (if-not (clojure.string/starts-with?
-                              (:oid commit-clj-object)
-                              commit-oid)
-                       (recur (rest remain-commits))
-                       (load-repo-file-from-commit
-                        repo-dir
-                        path-in-repo
-                        (:oid commit-clj-object)
-                        on-resolved)))))))))
+                   (if (empty? remain-commits)
+                     (if on-failed
+                       (on-failed GRA)
+                       (js/console.warn
+                        (str "FAILED TO RESOLVE:\n"
+                             (pr-str GRA))))
+                     (let [commit-description (first remain-commits)
+                           commit-clj-object (js->clj commit-description :keywordize-keys true)
+                           {timestamp :timestamp
+                            tzoffset :timezoneOffset} (-> commit-clj-object (:author))]
+                       (if-not (clojure.string/starts-with?
+                                (:oid commit-clj-object)
+                                commit-oid)
+                         (recur (rest remain-commits))
+                         (load-repo-file-from-commit
+                          env-resolved-dir
+                          path-in-repo
+                          (:oid commit-clj-object)
+                          on-resolved))))))))))
