@@ -204,6 +204,26 @@
                  (vec (butlast out))
                  (conj out part)))))))
 
+(defn parse-content-resolver-string
+  "given a set of matchers (e.g. org or url-query), return sequence of resolver specifications"
+  [matchers resolver-string]
+  (when-not (empty? resolver-string)
+    (loop [matcher-remain matchers
+           out []]
+      (if (empty? matcher-remain)
+        out
+        (let [[range-type matcher]
+              (first matcher-remain)
+              maybe-match (matcher resolver-string)]
+          (recur
+           (rest matcher-remain)
+           (if maybe-match
+             (conj out
+                   {:bound maybe-match
+                    :type range-type})
+             out)))))))
+
+;; TODO: extract the link struct into external schema
 (defn parse-link [link]
   (let [protocol-matcher
         (-> (str
@@ -236,27 +256,12 @@
         [path maybe-qualifier-separator maybe-qualifier]
         (rest (re-find link-matcher remainder))
         
-        maybe-resolvers
-        (when-not (empty? maybe-qualifier)
-          (loop [matcher-remain
-                 (case maybe-qualifier-separator
-                   "::" org-style-range-matchers
-                   "?" url-style-constrictor-matchers
-                   nil)
-                 out []]
-            (if (empty? matcher-remain)
-              out
-              (let [[range-type matcher]
-                    (first matcher-remain)
-                    maybe-match (matcher maybe-qualifier)]
-                (recur
-                 (rest matcher-remain)
-                 (if maybe-match
-                   (conj out
-                         {:bound maybe-match
-                          :type range-type})
-                   out))))))
-        ]
+        maybe-resolvers (parse-content-resolver-string
+                         (case maybe-qualifier-separator
+                           "::" org-style-range-matchers
+                           "?" url-style-constrictor-matchers
+                           nil)
+                         maybe-qualifier)]
     
     {:link link
      :post-processors post-processors
