@@ -26,7 +26,7 @@
   ^js/Object
   (.each db "SELECT key, value FROM kv"
          (fn [err row]
-           (js/console.log err row)
+           #_(js/console.log err row)
            (swap! cache-atom assoc
                   (aget row "key")
                   (-> (aget row "value")
@@ -34,5 +34,5 @@
 
 (defn save-kv! [key-string value-json-string]
   (when-let [db @$sqlite-db]
-    (-> ^js/Object (.prepare db "INSERT INTO kv VALUES (?, ?)")
+    (-> ^js/Object (.prepare db "INSERT OR IGNORE INTO kv VALUES (?, ?)")
         ^js/Object (.run key-string value-json-string))))

@@ -38,7 +38,7 @@
      (str "::" resolver-string))))
 
 (defrecord GitResourceAddress
-    [repo-name oid path content-resolver])
+    [repo-name oid path content-resolvers])
 
 ;; subsumed completely by parse-git-protocol-blob-path?
 (defn parse-git-resource-address [git-resource-address]
@@ -48,25 +48,25 @@
               repo-name
               oid-hash
               path-in-repo
-              content-resolver]
+              content-resolvers]
              (re-find #"([^/]+)/blob/([a-fA-F0-9]+)/([^:?]+)(.*)"
                       git-resource-address)]
     (GitResourceAddress.
-     repo-name oid-hash path-in-repo content-resolver)))
+     repo-name oid-hash path-in-repo content-resolvers)))
 
 (defn parse-git-protocol-blob-path [git-protocol-path]
   (comment
     (parse-git-protocol-blob-path
      "git:../../../.git/blob/e12ac2/xcl/README.org::*content resolvers"))
   (let [known-address-pattern (str "git:(.+?)/blob/([0-9a-fA-F]{5,})/(.+)")
-        [_full-match
+        [full-match
          repo-path
          commit-oid
          path-in-repo-with-resolver]
         (re-matches
          (re-pattern known-address-pattern)
          git-protocol-path)]
-    (when-not _full-match
+    (when-not full-match
       (throw (js/Error.
               (str
                "ERROR:\n"
@@ -75,12 +75,12 @@
                "  currently, only this pattern is understood:\n"
                known-address-pattern
                "\n"))))
-    (let [[_
-           path-in-repo
-           content-resolver]
-          (re-matches
-           #"(.+?)::(.+)"
-           path-in-repo-with-resolver)
+    ;; WARN this only supports the org-style resolver separator and "?" tokens now
+    ;;       the hard-codedness will become brittle with more flexibile syntaxes
+    (let [link (sc/parse-link full-match)
+          path-in-repo (-> path-in-repo-with-resolver
+                           (clojure.string/split #"(::|\?)")
+                           (first))
           cleaned-repo-path (-> (if (clojure.string/ends-with? repo-path "/.git")
                                   (subs repo-path 0 (- (count repo-path) 5))
                                   repo-path)
@@ -90,7 +90,7 @@
        commit-oid
        (or path-in-repo
            path-in-repo-with-resolver)
-       content-resolver))))
+       (:content-resolvers link)))))
 
 (defn load-repo-file-from-commit [repo-dir path-in-repo commit-oid fn-on-success]
   (-> (.readObject git
@@ -99,16 +99,19 @@
                                    :oid commit-oid
                                    :filepath path-in-repo)))
       (.then (fn [retrieved-object]
-               (-> (git-content-object-to-string
-                    retrieved-object)
+               (-> (git-content-object-to-string retrieved-object)
                    (fn-on-success)))
              (fn [error]
                (js/console.error error)))))
 
+;; WARN: GitResourceAddress overlaps its :content-resolvers with the
+;;       general xcl link structure; this is why we can send it to
+;;       ci/resolve-content, but this should be more cleanly and
+;;       strictly combined with the more general xcl struct
 (defn resolve-git-resource-address [{commit-oid :oid
                                      repo-dir :repo-name
                                      path-in-repo :path
-                                     resolver :content-resolver
+                                     resolvers :content-resolvers
                                      :as GRA}
                                     on-resolved
                                     & [on-failed]]
@@ -116,21 +119,23 @@
   
   (let [env-resolved-dir (get-environment-substituted-path
                           repo-dir)]
+    
     (-> (.log git (clj->js (assoc $base-git-param
                                   :dir env-resolved-dir)))
+        (.catch (fn [error]
+                  (throw error)))
         (.then (fn [commits]
                  (loop [remain-commits
                         (->> commits
                              (array-seq)
                              (sort-by (fn [commit]
                                         (aget commit "author" "timestamp"))))]
-                 
                    (if (empty? remain-commits)
-                     (if on-failed
-                       (on-failed GRA)
-                       (js/console.warn
-                        (str "FAILED TO RESOLVE:\n"
-                             (pr-str GRA))))
+                     (do
+                       (js/console.warn "failed to resolve:"
+                                        (pr-str GRA))
+                       (when on-failed
+                         (on-failed GRA)))
                      (let [commit-description (first remain-commits)
                            commit-clj-object (js->clj commit-description :keywordize-keys true)
                            {timestamp :timestamp
@@ -143,4 +148,6 @@
                           env-resolved-dir
                           path-in-repo
                           (:oid commit-clj-object)
-                          on-resolved))))))))))
+                          (fn [content]
+                            (-> (ci/resolve-content GRA content)
+                                (on-resolved)))))))))))))

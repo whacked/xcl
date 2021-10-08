@@ -54,7 +54,9 @@
                 :render
                 xcl.node-interop/render
                 :parseLink
-                xcl.node-interop/-parse-link
+                xcl.node-interop/parse-link
+                :getText
+                xcl.node-interop/get-text
                 }}
 
   :node-content-server {:target :node-script

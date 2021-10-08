@@ -190,3 +190,65 @@
        assoc
        :zotero
        :zotero-file)
+
+
+;; originally taken from test.cljs, but test uses an internal path resolver
+(defn load-local-resource [spec on-loaded]
+  (cond (= :git (:resource-resolver-method spec))
+        (let [gra (git/parse-git-protocol-blob-path
+                   ;; this re-adds the git: protocol prefix to the parsed path;
+                   ;; :link contains the git: prefixed string but also contains
+                   ;; the resolver string, which parse-git-protocol-blob-path
+                   ;; does not handle. consider streamlining this logic.
+                   (str "git:" (:resource-resolver-path spec)))]
+          
+          (git/resolve-git-resource-address gra on-loaded))
+        
+        :else ;; assume filesystem based loader
+        (-> spec
+            (:resource-resolver-path)
+            ;; NOTE this line is different from test.cljs
+            (slurp-file)
+            (on-loaded))))
+
+(def $lookup-cache (atom {}))
+(when @sqldb/$sqlite-db
+  (sqldb/hydrate-atom-from-db! $lookup-cache @sqldb/$sqlite-db))
+
+(defn get-text [directive callback]
+  (let [protocol "xcl"
+        spec (sc/parse-link directive)
+        loader (or (@ext/$ExternalLoaders (-> (:resource-resolver-path spec)
+                                              (clojure.string/split ".")
+                                              (last)))
+                   load-local-resource)]
+    (if-let [cached-result (@$lookup-cache directive)]
+      (do
+        (callback cached-result))
+      (do
+        (loader spec
+                (fn [full-content]
+                  (let [out (ci/resolve-content spec full-content)
+                        js-content (clj->js out)]
+                    (swap! $lookup-cache assoc directive js-content)
+                    (sqldb/save-kv!
+                     directive
+                     (-> js-content
+                         (js/JSON.stringify)))
+                    (callback out))))))))
+
+(comment
+  ;; example use
+  (let [base-directive
+        (str "git:"
+             (path-join (js/process.cwd) ".git" "blob"
+                        ;; git rev-parse HEAD
+                        "60a987249be851cb9b0856a054261cf4d5c3244c/README.org"))]
+    (get-text (str base-directive "::1-10")
+              (fn [text]
+                (js/console.log "=== lines 1-10 ===" text)))
+
+    ;; note there are multiple matches for "for inline transclusion", so it needs further qualification
+    (get-text (str base-directive "::for inline transclusion, since...shortest syntax")
+              (fn [text]
+                (js/console.log "=== segment match ===" text)))))
