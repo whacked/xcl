@@ -1,4 +1,6 @@
 {
+  "name": "xcl",
+  "version": "0.0.1",
   "scripts": {
     "watch": "shadow-cljs watch node-test",
     "watch-xcl": "shadow-cljs watch node-content-server",
