@@ -6,7 +6,7 @@ stdenv.mkDerivation rec {
         paths = buildInputs;
     };
     buildInputs = [
-        nodejs-10_x
+        nodejs
         postgresql
         sqlite
         watchexec
@@ -28,5 +28,7 @@ stdenv.mkDerivation rec {
         }
 
         cat ${__curPos.file} | grep '^ *alias'
+    '' + ''
+        echo-shortcuts ${__curPos.file}
     '';
 }
