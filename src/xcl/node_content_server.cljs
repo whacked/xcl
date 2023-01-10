@@ -6,7 +6,7 @@
    ["body-parser" :rename {json json-parser}]
    ["node-ipc" :as node-ipc]
    [xcl.common :refer [get-file-extension]]
-   
+
    ["yesql" :as yesql]
    ["fs" :as fs]
    ["path" :as path]
@@ -22,79 +22,21 @@
    [xcl.calibre-interop :as calibre]
    [xcl.zotero-interop :as zotero]
    [xcl.git-interop :as git]
+   [xcl.resource-resolution
+    :refer [$resource-resolver-loader-mapping
+            load-by-resource-resolver]]
    [xcl.console :as console]
-   
+   [xcl.core :as sc]
+
    [xcl.indexer.engine :as indexer]
    [xcl.textsearch.engine :as textsearch]
    [xcl.indexer.signaling :as signaling]
-   
    [xcl.env :as env :refer [$config]]
    [xcl.sqlite :as sqldb]))
 
 (def $JSONRPC-PORT (env/get :jsonrpc-port))
 (def $XCL-NO-CACHE "xcl-no-cache")
 (def $XCL-SERVER-ID "xcl-server")
-
-(def $resource-resolver-loader-mapping
-  (atom {:calibre-file
-         (fn [spec callback]
-           (calibre/load-text-from-epub
-            (str "*" (:resource-resolver-path spec) "*.epub")
-            spec
-            (fn [text]
-              (js/console.log (str "calibre epub: " (count text) " bytes\n\n"))
-              (->> text
-                   (clojure.string/trim)
-                   (assoc spec :text)
-                   (clj->js)
-                   (callback nil)))))
-
-         :zotero-file
-         (fn [spec callback]
-           (zotero/load-text-from-file
-            (str "*" (:resource-resolver-path spec) "*")
-            spec
-            (fn [text & [page]]
-              (js/console.log
-               (str "zotero loaded:\n"
-                    (when page
-                      (str "page: " page "\n"))
-                    (count text)
-                    " bytes\n\n"))
-              (->> (if text (clojure.string/trim text) "")
-                   (assoc spec :text)
-                   (clj->js)
-                   (callback nil)))
-            (fn [err]
-              (js/console.error err))))
-
-         :exact-name
-         (fn [spec callback]
-           (let [extension (get-file-extension
-                            (:resource-resolver-path
-                             spec))]
-             (when-let [external-loader (@ext/$ExternalLoaders extension)]
-               (println "!!! loading for extension " extension
-                        "\n" spec " --using--> " external-loader)
-               (external-loader
-                spec
-                (fn [text]
-                  (some->> (ci/resolve-content spec text)
-                           (clojure.string/trim)
-                           (assoc spec :text)
-                           (clj->js)
-                           (callback nil)))))))}))
-
-(defn load-by-resource-resolver [spec callback]
-  (if-let [loader (@$resource-resolver-loader-mapping
-                   (:resource-resolver-method spec))]
-    (loader spec callback)
-    (do
-      (js/console.warn (console/red "FAILED TO LOAD RESOLVER FOR "
-                                    (str spec))
-                       " available resolvers:")
-      (doseq [key (keys @$resource-resolver-loader-mapping)]
-        (js/console.warn (str "- " key))))))
 
 (defn open-file-natively [file-path]
   (let [open-command (str
@@ -142,14 +84,14 @@
               (cache-log "wrapping request cache for " method-key)
               [method-key
                (fn [args context original-callback]
-                 
+
                  (if (some->> (aget context "headers" $XCL-NO-CACHE)
                               (clojure.string/lower-case)
                               (#{"yes" "true" "1"}))
                    (do
                      (cache-log (console/red (str "bypassing cache for " args)))
                      (original-handler args context original-callback))
-                   
+
                    (let [cache-key (->json args)
                          maybe-cached-response (load-from-cache cache-key)]
                      (cache-log "checking cache key: " cache-key)
