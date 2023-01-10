@@ -140,7 +140,13 @@
    #+BEGIN_SRC sh
    watchexec --restart --no-ignore --watch ./build node build/node-content-server.js
    #+END_SRC
-   
+
+   default server response test
+
+   #+BEGIN_SRC sh
+   curl 'http://localhost:23120/'  -H 'Accept: application/json' -H 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","id":0,"method":"help","params":[]}'
+   #+END_SRC
+
 * building for node.js
 
   #+BEGIN_SRC sh :eval never
