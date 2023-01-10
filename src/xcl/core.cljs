@@ -359,8 +359,34 @@
 (def transclusion-directive-matcher
   #"\{\{\{transclude\(([^\)]+)\)\}\}\}")
 
-(defn parse-transclusion-directive [text]
+(def transclusion-directive-matcher-short
+  #"\{\{([^\}]+)\}\}")
+
+(defn parse-triple-brace-transclusion-directive [text]
   (re-pos transclusion-directive-matcher text))
+
+(defn parse-transclusion-directive [text]
+  (let [triple-brace-matches (re-pos transclusion-directive-matcher text)
+        string-with-deletions
+        (loop [introns (->> triple-brace-matches
+                            (map (fn [[start-index matches]]
+                                   [start-index (count (first matches))]))
+                            (sort-by first))
+               out []
+               previous-index 0]
+          (if (empty? introns)
+            (->> (if (< previous-index (count text))
+                   (conj out (subs text previous-index (count text)))
+                   out)
+                 (apply str))
+            (let [[start match-length] (first introns)]
+              (recur (rest introns)
+                     (conj out
+                           (subs text previous-index start)
+                           (apply str (take match-length (repeat "\0"))))
+                     (+ start match-length)))))]
+    (-> (re-pos transclusion-directive-matcher-short string-with-deletions)
+        (merge triple-brace-matches))))
 
 (defn resolve-resource-address [resource-address]
   (if (string? resource-address)
