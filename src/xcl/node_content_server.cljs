@@ -31,8 +31,10 @@
    [xcl.indexer.engine :as indexer]
    [xcl.textsearch.engine :as textsearch]
    [xcl.indexer.signaling :as signaling]
+
    [xcl.env :as env :refer [$config]]
-   [xcl.sqlite :as sqldb]))
+   [xcl.sqlite :as sqldb]
+   [xcl.node-console-monkey-patch]))
 
 (def $JSONRPC-PORT (env/get :jsonrpc-port))
 (def $XCL-NO-CACHE "xcl-no-cache")
@@ -92,7 +94,7 @@
                      (cache-log (console/red (str "bypassing cache for " args)))
                      (original-handler args context original-callback))
 
-                   (let [cache-key (->json args)
+                   (let [cache-key (->json [method-key args])
                          maybe-cached-response (load-from-cache cache-key)]
                      (cache-log "checking cache key: " cache-key)
                      (if-not (empty? maybe-cached-response)
@@ -227,7 +229,7 @@
 
                       directive callback)))
 
-       :open (fn [args callback]
+       :open (fn [args context callback]
                (let [{:keys [protocol directive]}
                      (js->clj args :keywordize-keys true)
                      resource-spec (sc/parse-link directive)
@@ -256,6 +258,10 @@
 
                    ;; generic
                    (complete-request resolved-path))))
+
+       ;; TODO: move me
+       :ZoteroGetAllTags (fn [args context callback]
+                           (zotero/get-all-tags (fn [tags] (callback nil (clj->js tags)))))
 
        (keyword signaling/$search-text)
        (fn [js-args context jayson-callback]

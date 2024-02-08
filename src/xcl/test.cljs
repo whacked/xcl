@@ -36,7 +36,7 @@
           (git/resolve-git-resource-address
            gra
            on-loaded))
-        
+
         :else ;; assume filesystem based loader
         (-> spec
             (:resource-resolver-path)
@@ -78,7 +78,7 @@
              (get-local-resource-path)
              (slurp)
              (ci/resolve-content relpath-spec))]
-    
+
     (if (and (< 0 (count resolved-abspath-content))
              (clojure.string/starts-with? resolved-abspath-content
                                           "* example usage")
@@ -174,7 +174,7 @@
 
 (defn pdf-loader-test []
   (let [external-loader (@ext/$ExternalLoaders "pdf")
-        resource-spec (sc/parse-link 
+        resource-spec (sc/parse-link
                        "xcl:./public/tracemonkey.pdf?p=3&s=Monkey observes that...so TraceMonkey attempts")]
     (external-loader
      resource-spec
@@ -200,6 +200,43 @@
                                        (clojure.string/trim)
                                        (subs 0 200))
                             "\n\n"))
+       (signal-test-done!)))))
+
+(defn csv-loader-test []
+  (let [external-loader (@ext/$ExternalLoaders "csv")
+        resource-spec (sc/parse-link "xcl:./public/test-dataset.csv?A1=B4")]
+    (external-loader
+     resource-spec
+     (fn [text]
+       (if (= text "88")
+         (log-green "[CSV OK]")
+         (log-red "[CSV BAD]"))
+       (js/console.log (str "    " (pr-str resource-spec) "\n"
+                            "    " text
+                            "\n\n"))
+       (signal-test-done!)))))
+
+(defn tsv-loader-test []
+  ;; same as csv, but use the jq loader
+  (let [external-loader (@ext/$ExternalLoaders "csv")
+        resource-spec (sc/parse-link "xcl:./public/test-dataset.tsv?jq=.[2].Name")]
+    (external-loader
+     resource-spec
+     (fn [text]
+       (if (= text "Charlie")
+         (log-green "[TSV OK]")
+         (log-red "[TSV BAD"))
+       (signal-test-done!)))))
+
+(defn jsonl-loader-test []
+  (let [external-loader (@ext/$ExternalLoaders "jsonl")
+        resource-spec (sc/parse-link "xcl:./public/test-dataset.jsonl?jq=.[3].Name")]
+    (external-loader
+     resource-spec
+     (fn [text]
+       (if (= text "Diana")
+         (log-green "[JSONL OK]")
+         (log-red "[JSONL BAD]"))
        (signal-test-done!)))))
 
 (defn add-node-test! [test-func]
@@ -230,7 +267,7 @@
       (println (ci/resolve-content
                 spec full-content))
       (log-green "----------------------------------------")))
-  
+
   (add-node-test!
    (fn default-file []
      (let [directive "transcluding-org-elements.org"]
@@ -272,7 +309,7 @@
      (let [directive "xcl:README.org?para=the+pipe+is+an+obvious"]
        (load-from-directive directive)
        (signal-test-done!))))
-  
+
   (add-node-test!
    (fn xcl-yaml-jsonpath []
      (let [directive "xcl:xcl/public/test-highlight-file.yml?jsonpath=$.highlights[2].highlightText"]
@@ -282,20 +319,26 @@
   (when zotero/$zotero-library-directory
     (add-node-test! zotero-test-pdf)
     (add-node-test! zotero-test-html))
-  
+
   (when calibre/$calibre-library-directory
     (add-node-test! calibre-test))
-  
+
   (add-node-test! pdf-loader-test)
-  
+
   (add-node-test! epub-loader-test)
-  
+
+  (add-node-test! csv-loader-test)
+
+  (add-node-test! tsv-loader-test)
+
+  (add-node-test! jsonl-loader-test)
+
   (add-node-test! git-direct-content-loader-test)
-  
+
   (add-node-test! git-resolved-content-loader-test)
-  
+
   (add-node-test! fs-abspath-and-relpath-file-loader)
-  
+
   (run-all-tests!))
 
 (-main)

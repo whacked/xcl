@@ -32,7 +32,7 @@ north star mars car
    "somewhere/../big.org" "another fake file"
    "./big.org" "another fake file"
    "/tmp/some-big.org" "fake file in temp dir"
-   
+
    "fake.org" "some fake information\nto throw you off"
    "dummy.org" (loader/slurp-file "public/dummy.org")
    "dummy: the clone.org" (loader/slurp-file "public/dummy.org")
@@ -70,6 +70,9 @@ north star mars car
    "xcl-test-rewrite.org" "relpath rewrite filter?\n\n{{{transclude(sub/directory/xcl-in-subdir.org|rewrite-relative-paths)}}}"
    "test-note-file.json" (loader/slurp-file "public/test-note-file.json")
    "test-highlight-file.yml" (loader/slurp-file "public/test-highlight-file.yml")
+   "inline-syntax-interop-1.org" "content from big:\n\n{{big.org}}"
+   "inline-syntax-interop-2.org" "{{inline-syntax-interop-1.org:}}"
+   "inline-syntax-stich.md" "{{inline-syntax-intreop.org}}\n{{}}"
    })
 
 (defn list-files [_fake-directory]

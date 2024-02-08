@@ -4,7 +4,13 @@
              :refer [get-all-text]]
             [xcl.pdfjslib-interop
              :refer [set-pdfjslib!
-                     pdfjslib-load-text]]))
+                     pdfjslib-load-text]]
+            [xcl.xsv-interop :as xsv]
+            ["papaparse" :refer [parse]]))
+
+;; loaders for browser-compatible content loaders.
+;; this is why pdf and epub loaders are registered
+;; separately for node and browser
 
 (def $WEB-CONTENT-ROOT "/")
 
@@ -92,3 +98,37 @@
                                  (fn [err]
                                    (js/console.error err)))))))]
                   (load-pages! (range (dec page-beg) page-end)))))))))))
+
+;; jsonl
+(ext/register-loader!
+ "jsonl"
+ (fn [resource-address callback]
+   (let [file-name (:resource-resolver-path resource-address)
+         rel-uri (str $WEB-CONTENT-ROOT
+                      file-name)]
+     (if-not file-name
+       (js/alert (str "NO SUCH FILE: " file-name))
+       (-> (js/fetch rel-uri)
+           (.then #(.text %))
+           (.then (fn [jsonl-content]
+                    (-> (ext/read-jsonl jsonl-content)
+                        (ci/query-by-jq-record-locator
+                         (-> (get-in resource-address [:content-resolvers])
+                             (first)
+                             (:bound)))
+                        (callback)))))))))
+
+;; xsv
+(doseq [extension ["csv" "tsv"]]
+  (ext/register-loader!
+   extension
+   (fn [resource-address callback]
+     (let [file-name (:resource-resolver-path resource-address)
+           rel-uri (str $WEB-CONTENT-ROOT
+                        file-name)]
+       (if-not file-name
+         (js/alert (str "NO SUCH FILE: " file-name))
+         (-> (js/fetch rel-uri)
+             (.then #(.text %))
+             (.then (fn [xsv-string]
+                      (xsv/resolve-xsv-string xsv-string resource-address callback)))))))))

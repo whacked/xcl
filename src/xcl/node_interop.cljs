@@ -1,10 +1,10 @@
 (ns xcl.node-interop
-  (:require ["pdfjs-dist/es5/build/pdf" :as pdfjsLib]
+  (:require ["pdfjs-dist" :as pdfjsLib]
             ["fs" :as fs]
             ["path" :as path]
             ["js-yaml" :as yaml]
             ["jsonpath-plus" :as JSONPath]
-            
+
             [xcl.common :refer [get-file-extension]]
             [xcl.git-interop :as git]
             [xcl.core :as sc :refer [render-transclusion]]
@@ -16,6 +16,7 @@
              :as pdfi]
             [xcl.api-v1 :as api]
             [xcl.node-epub-interop :as epubi]
+            [xcl.xsv-interop :as xsv]
             [xcl.node-common :refer
              [path-join path-exists? slurp-file]]
             [xcl.node-common :refer
@@ -69,7 +70,7 @@
   postprocessor-coll to ensure resultant object is native #js type
   "
   [candidate-seq-loader content-loader source-text & postprocessor-coll]
-  
+
   (->> postprocessor-coll
        (map (fn [postprocessor-fn]
               (fn [content xcl-spec depth]
@@ -103,7 +104,7 @@
                              :excerpt (subs text index-beg index-end))))))
               (fn on-complete-all-sections [_sections]
                 (on-complete (clj->js @result))))
-     
+
       "pdf" (pdfi/process-pdf
              expanded-path
              (fn on-get-page-text [page-num page-text]
@@ -121,7 +122,7 @@
                             :excerpt (subs page-text index-beg index-end))))))
              (fn on-complete-page-texts [page-texts]
                (on-complete (clj->js @result))))
-     
+
       nil)))
 
 (defn parse-link [link-text]
@@ -173,6 +174,25 @@
                    (ext/read-jsonpath-content jsonpath)
                    (first)))))
 
+;;;;;;;;;;;
+;; jsonl ;;
+;;;;;;;;;;;
+(ext/register-loader!
+ "jsonl"
+ (fn [resource-address callback]
+   (let [file-name (get-environment-substituted-path
+                    (:resource-resolver-path resource-address))]
+     (if-not file-name
+       (js/console.warn (str "NO SUCH FILE: " file-name))
+       (when-let [bound-spec
+                  (-> (get-in resource-address [:content-resolvers])
+                      (first)
+                      (:bound))]
+         (some-> (slurp-file file-name)
+                 (ext/read-jsonl)
+                 (ci/query-by-jq-record-locator bound-spec)
+                 (callback)))))))
+
 ;;;;;;;;;;;;;;;;;;;;;
 ;; calibre, zotero ;;
 ;;;;;;;;;;;;;;;;;;;;;
@@ -201,9 +221,9 @@
                    ;; the resolver string, which parse-git-protocol-blob-path
                    ;; does not handle. consider streamlining this logic.
                    (str "git:" (:resource-resolver-path spec)))]
-          
+
           (git/resolve-git-resource-address gra on-loaded))
-        
+
         :else ;; assume filesystem based loader
         (-> spec
             (:resource-resolver-path)
@@ -236,6 +256,25 @@
                      (-> js-content
                          (js/JSON.stringify)))
                     (callback out))))))))
+
+;;;;;;;;;;
+;; xsv  ;;  but really, only csv and tsv
+;;;;;;;;;;
+(doseq [extension ["csv" "tsv"]]
+  (ext/register-loader!
+   extension
+   (fn [resource-address callback]
+     (let [file-name (get-environment-substituted-path
+                      (:resource-resolver-path resource-address))
+           delimiter (xsv/get-delimiter-from-file-extension file-name)]
+       (if-not file-name
+         (js/console.warn (str "NO SUCH FILE: " file-name))
+         (when-let [{:keys [bound type]}
+                    (-> (get-in resource-address [:content-resolvers])
+                        (first))]
+           (let [xsv-string (slurp-file file-name)]
+             (xsv/resolve-xsv-string
+              xsv-string resource-address callback))))))))
 
 (comment
   ;; example use

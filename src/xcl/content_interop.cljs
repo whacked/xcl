@@ -75,7 +75,7 @@
                            nil
                            {}
                            (assoc out current-drawer-name buffer))
-                    
+
                     (and current-drawer-name
                          (= (count indentation)
                             current-drawer-indent-level))
@@ -85,7 +85,7 @@
                            current-drawer-indent-level
                            (assoc buffer (keyword key-name) maybe-value)
                            out)
-                    
+
                     :else
                     (recur (rest remain)
                            current-drawer-name
@@ -93,6 +93,9 @@
                            buffer
                            out)))))))))
 
+;; NOTE: consider updating this; these are plain-text resolvers,
+;;       i.e. assumed to work within a fully-loaded blob of text.
+;;       so these are incompatible with async resource loaders
 (def $resolver
   (atom {:whole-file (fn [_ content] content)
          :line-range (fn [spec content]
@@ -116,7 +119,7 @@
                                 {:keys [beg end]} (:bound spec)
                                 beg-index (->> (* 0.01 beg n-lines)
                                                (Math/round)
-                                               (max 0)) 
+                                               (max 0))
                                 end-index (->> (* 0.01 end n-lines)
                                                (Math/round))]
                             (->> lines
@@ -156,11 +159,11 @@
                               (subs content
                                     maybe-begin-index
                                     (+ maybe-end-index (count token-end)))))))
-         
+
          :line-with-match (fn [spec content]
                             (find-first-matching-string-element
                              spec (clojure.string/split-lines content)))
-         
+
          :paragraph-with-match (fn [spec content]
                                  (find-first-matching-string-element
                                   spec (clojure.string/split content #"[\r\t ]*\n[\r\t ]*\n[\r\t ]*")))
@@ -261,9 +264,35 @@
             (pr-str resolver-spec))
       (@$resolver :whole-file))))
 
+
+;;; RECORD RESOLVERS
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; jq-style record resolver ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
+(defn query-by-jq-record-locator
+  [records bound-spec]
+  (let [{:keys [row-index record-key]} bound-spec]
+    (some-> records
+            (nth row-index)
+            (get record-key))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; excel-a1 record resolver ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
+(defn query-by-excel-a1-locator
+  [rows bound-spec]
+  (let [{:keys [row-number col-number]} bound-spec]
+    (-> rows
+        (nth (dec row-number))
+        (nth (dec col-number)))))
+
+
 ;; WARNING: no provision for windows
 (def $DIRECTORY-SEPARATOR "/")
-                 
+
 (def $known-post-processors
   (atom {"rewrite-relative-paths"
          (fn [content resolved-spec]
@@ -294,7 +323,7 @@
           (->> resolved-spec
                (:content-resolvers)
                (last))
-          
+
           resolver (get-resolver final-resolver-spec)]
       (loop [remaining-post-processors
              (:post-processors resolved-spec)

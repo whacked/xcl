@@ -6,6 +6,8 @@
             [xcl.zotero-interop :as zotero]
             [xcl.calibre-interop :as calibre]))
 
+;; NOTE: looks like these are a counterpart to ci/$resolver
+;;       as they support async loading via callback
 (def $resource-resolver-loader-mapping
   (atom {:calibre-file
          (fn [spec callback]
@@ -66,4 +68,3 @@
                        " available resolvers:")
       (doseq [key (keys @$resource-resolver-loader-mapping)]
         (js/console.warn (str "- " key))))))
-

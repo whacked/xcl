@@ -9,8 +9,11 @@
             [xcl.external-js-content :as ext-js]
             [xcl.external :as ext]
             [ajax.core :refer [ajax-request]]
-            [xcl.env :as env]))
+            [xcl.env :as env]
 
+            [xcl.common :refer [re-pos conj-if-non-nil
+                                get-file-extension]]
+            ))
 (def $JSONRPC-SERVER-ENDPOINT
   (str "//" (env/get :jsonrpc-host) ":" (env/get :jsonrpc-port) (env/get :jsonrpc-endpoint) "/"))
 
@@ -72,32 +75,39 @@
        (vector :table {:style {:font-size "x-small"}})
        (vec)))
 
-;; TODO: revisit the pdb/epub special case ugliness
+;; TODO: revisit this special case ugliness.
+;;       currently, this declaration is required to make the
+;;       browser request the file content from the server
+(def -external-file-types
+  #{"pdf" "epub" "csv" "tsv" "jsonl"})
+
 (defn resolve-resource-spec-async
   [link on-resolved-resource-spec]
-  
+
   (cond (clojure.string/starts-with? link "<<org-text>>")
         (->> (@corpus/org-text-buffer "<<org-text>>")
              (assoc (sc/parse-link link) :org-text)
              (on-resolved-resource-spec))
-        
+
         :else
         (sc/get-resource-match-async
          ;; candidate-seq-loader-async
          (fn [resource-name-matcher
               callback]
-           
+
            (cond (and resource-name-matcher
-                      (#{"pdf" "epub"}
+                      (-external-file-types
                        (get-file-extension resource-name-matcher)))
                  (callback [resource-name-matcher])
-                 
+
                  ;; file in corpus
                  :else
-                 (->> (corpus/list-files
-                       resource-name-matcher)
-                      (callback))))
-         
+                 (do
+                   (js/console.warn "file is in corpus: " link)
+                   (->> (corpus/list-files
+                         resource-name-matcher)
+                        (callback)))))
+
          ;; content-loader-async
          (fn [resolved-spec callback]
            (js/console.log "hitting content loader for\n"
@@ -108,10 +118,10 @@
            (let [path (:resource-resolver-path resolved-spec)]
              (when-let [content (corpus/file-cache path)]
                (callback content))))
-         
+
          ;; link
          link
-         
+
          ;; callback
          on-resolved-resource-spec)))
 
@@ -120,7 +130,7 @@
   (let [path (:resource-resolver-path resource-spec)
         extension (when path
                     (get-file-extension path))]
-    
+
     (cond (@ext/$ExternalLoaders extension)
           (let [external-loader (@ext/$ExternalLoaders extension)]
             (external-loader
@@ -129,7 +139,7 @@
           (:org-text resource-spec)
           (let [org-content (:org-text resource-spec)]
             (on-content org-content))
-          
+
           :else
           (do
             (js/console.warn
@@ -227,7 +237,7 @@
            [:th "content"]
            [:th "target"]
            [:th "matches"]]
-     
+
           (->> [[:default
                  " a b c d f g "
                  " b d       f"]
@@ -262,7 +272,7 @@
                        (-> matches
                            (clj->js)
                            (js/JSON.stringify nil 2))]]]))))]]
-   
+
         (let [doc-names ["tiny.org"
                          "big.org"
                          "fake.org"
@@ -364,14 +374,14 @@
           (fn [i [desc link expected-name]]
             (let [received-name (r/atom nil)]
               [(fn []
-                     
+
                  (resolve-resource-spec-async
                   link
                   (fn [resolved-resource-spec]
                     (reset! received-name
                             (:resource-resolver-path
                              resolved-resource-spec))))
-                     
+
                  (let [success? (if (nil? @received-name)
                                   nil
                                   (= expected-name @received-name))]
@@ -408,7 +418,22 @@
                  [:h2 "resource resolver test"]))))
 
 (defn render-link-test-view! [view-state]
-  (->> [["line in file"
+  (->> [["grab text from json"
+         "xcl:test-note-file.json?jsonpath=$[6].content"
+         "floating note"
+         "test-note-file.json" :exact-name
+         nil
+         [{:type :jsonpath
+           :bound {:jsonpath "$[6].content"}}]]
+        ["grab text from yml"
+         "xcl:test-highlight-file.yml?jsonpath=$.highlights[2].highlightText"
+         "yaml indented text block that spans 2 lines"
+         "test-highlight-file.yml" :exact-name
+         nil
+         [{:type :jsonpath
+           :bound {:jsonpath "$.highlights[2].highlightText"}}]]
+
+        ["line in file"
          "LICENSE::7"
          "of this license document, but changing it is not allowed."
          "LICENSE" :exact-name
@@ -602,6 +627,34 @@
          nil
          [{:type :jsonpath
            :bound {:jsonpath "$.highlights[2].highlightText"}}]]
+
+
+        ["grab field from csv by column and row, Excel A1 notation"
+         "xcl:test-dataset.csv?A1=B4"
+         "Diana"
+         "test-dataset.csv" :exact-name
+         nil
+         [{:type :excel-a1
+           :bound {:col-number 2:row-number 5}}]]
+
+        ["grab field from tsv by row and key, jq lookup notation"
+         "xcl:test-dataset.tsv?jq=.[2].Name"
+         "Charlie"
+         "test-dataset.tsv" :exact-name
+         nil
+         [{:type :jq-record-locator
+           :bound {:row-index 2 :record-key "Name"}}]]
+
+        ;; need suport an org-mode table notation? something like "xcl:test-dataset.csv?orgtbl=@3$2"
+
+        ["grab field from jsonl by row and key, jq lookup notation"
+         "xcl:test-dataset.jsonl?jq=.[2].Name"
+         "Charlie"
+         "test-dataset.jsonl" :exact-name
+         nil
+         [{:type :jq-record-locator
+           :bound {:row-index 2 :record-key "Name"}}]]
+
         ["raw org text"
          "<<org-text>>::*b-heading"
          "* b-heading  :tag:tiger:\n\n  my text in the b heading"
@@ -637,7 +690,7 @@
                            -maybe-main-resolver-bound))
                         (merge -additional-merge-map))
                     received-match-text (r/atom nil)]
-                
+
                 (resolve-resource-spec-async
                  link
                  (fn on-resolved [resolved-resource-spec]
@@ -651,7 +704,7 @@
                                     (clojure.string/trim))]
                         (reset! received-match-text
                                 resolved-content))))))
-                
+
                 [(fn []
                    (let [received-spec (sc/parse-link link)
                          is-link-match?
@@ -664,10 +717,10 @@
                          is-text-match?
                          (= expected-match-text
                             @received-match-text)
-                         
+
                          success? (and is-link-match?
                                        is-text-match?)]
-                     
+
                      (if (and success?
                               (get-in @view-state [:hide-passing?]))
                        nil

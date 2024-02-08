@@ -11,6 +11,14 @@
 (defn read-json [json-string]
   (js/JSON.parse json-string))
 
+(defn read-jsonl [json-lines-string]
+  (->> json-lines-string
+       (clojure.string/split-lines)
+       (remove (fn [line]
+                 (empty? (clojure.string/trim line))))
+       (map (fn [line]
+              (js->clj (js/JSON.parse line))))))
+
 (defn read-yaml [yaml-string]
   (.safeLoad yaml yaml-string))
 

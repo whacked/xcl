@@ -47,6 +47,29 @@
 (defn string-to-float [s]
   (when s (js/parseFloat s)))
 
+(defn a1-column-to-int [s]
+  (comment  ;; test
+    (assert (= (a1-column-to-int "A") 1))
+    (assert (= (a1-column-to-int "E") 5))
+    (assert (= (a1-column-to-int "Z") 26))
+    (assert (= (a1-column-to-int "BZ") 78)))
+
+  (->> s
+       (clojure.string/upper-case)
+       (map (fn [s]
+              (- (.charCodeAt s)
+                 65)))
+       (reduce (fn [ss char-numeric-value]
+                 (+ (* ss 26)
+                    char-numeric-value
+                    1))
+               0)))
+
+(defn a1-row-to-int [s]
+  (some-> s
+          (string-to-int)
+          (inc)))
+
 (defn web-query-to-string [s]
   (some-> s
           (clojure.string/replace #"%20" " ")))
@@ -132,7 +155,7 @@
 (def url-style-constrictor-matchers
   [[:org-node-id
     (make-named-matcher #"id=(\S+)" [:id])]
-   
+
    [:page-number
     (let [page-range-matcher
           (make-named-matcher #"p=(\d+)?(-)?(\d+)?"
@@ -146,7 +169,7 @@
             (assoc (select-keys match [:beg])
                    :end (:beg match))
             (select-keys match [:beg :end])))))]
-   
+
    [:token-bound
     (make-named-matcher #"s=(\S.*)\.\.\.(\S.*)"
                         [:token-beg :token-end])]
@@ -166,7 +189,16 @@
     (make-named-matcher #"jsonpath=(.+)$"
                         [:jsonpath]
                         [identity])]
-   ])
+
+   [:excel-a1
+    (make-named-matcher #"[aA]1=([a-zA-Z])+(\d)+$"
+                        [:col-number :row-number]
+                        [a1-column-to-int a1-row-to-int])]
+
+   [:jq-record-locator
+    (make-named-matcher #"jq=\.\[(\d+)\]\.(\w+)$"
+                        [:row-index :record-key]
+                        [string-to-int identity])]])
 
 (defn get-resource-resolver-method-for-file-by-type [file-path]
   (case (get-file-extension file-path)
@@ -234,13 +266,13 @@
                   (apply str))
              "):)?(.+)\\s*$")
             (re-pattern))
-        
+
         [maybe-protocol maybe-remainder]
         (rest (re-find protocol-matcher link))
 
         maybe-in-memory-buffer-type (when maybe-remainder
                                       (parse-in-memory-buffer-type maybe-remainder))
-        
+
         protocol (cond maybe-protocol
                        (keyword maybe-protocol)
 
@@ -251,18 +283,18 @@
         remainder-with-post-processors (-> (or maybe-remainder link)
                                            (clojure.string/split #"[|¦]"))
         remainder (first remainder-with-post-processors)
-        post-processors (seq (rest remainder-with-post-processors)) 
-        
+        post-processors (seq (rest remainder-with-post-processors))
+
         [path maybe-qualifier-separator maybe-qualifier]
         (rest (re-find link-matcher remainder))
-        
+
         maybe-resolvers (parse-content-resolver-string
                          (case maybe-qualifier-separator
                            "::" org-style-range-matchers
                            "?" url-style-constrictor-matchers
                            nil)
                          maybe-qualifier)]
-    
+
     {:link link
      :post-processors post-processors
      :protocol protocol
@@ -273,9 +305,7 @@
                                    (clean-path)
                                    (js/decodeURI)
                                    (str)))
-     :resource-resolver-method (cond (get
-                                      @$known-resource-resolver-mapping
-                                      protocol)
+     :resource-resolver-method (cond (get @$known-resource-resolver-mapping protocol)
                                      (@$known-resource-resolver-mapping protocol)
 
                                      (re-find #"\*" path)
@@ -293,6 +323,7 @@
    content-loader-async
    link
    callback-on-received-match]
+
 
   (let [resolved (parse-link link)
         resource-resolver-path (:resource-resolver-path resolved)
@@ -347,7 +378,7 @@
                                         (assoc resolved
                                                :resource-resolver-path match-name)))
                                  (maybe-load-content-async!))))
-          
+
           (fn [matching-resources]
             (js/console.error (str "ERROR: unhandled resolver: "
                                    resource-resolver-method))))]
@@ -484,7 +515,7 @@
 
 (defn find-all-match-candidate-indexes-in-content
   [token content]
-  
+
   (comment
     (= (find-all-match-candidate-indexes-in-content
         "b" "a b b b c d e f f b b g")
@@ -579,7 +610,7 @@
                   maybe-first-token-first-start-index
                   (+ maybe-last-token-last-start-index
                      (count (last tokens))))
-            
+
             all-matches
             (->> tokens
                  (map
@@ -613,7 +644,7 @@
   in the inner let form, you can change the match method from a
   boundex regex candidate match (current default) to a plain subtring
   match (using indexOf), which will be faster.
-  
+
   An example of the matching impact in practice: given
   - tokens 'in ring'
   - content 'looking within stringy rings'
@@ -628,11 +659,11 @@
     - ACCEPT 'inside' because in.*
     - REJECT 'finish' because .*in.*
     - REJECT 'looking' because .*in.*
-  
+
   thus, using non-compact matching, for the example above, will match
   'looking with[in] stringy [ring]s', returning
   'within stringy rings'
-  
+
   given a search query of 'in ring', I think the regex matcher
   will give a more intuitive result
   "
@@ -648,10 +679,10 @@
          nil)
        (let [token (first remain)
              content-substring (.substr content offset)
-             
+
              ;; plain substring match
              ;; maybe-index (.indexOf content-substring token)
-             
+
              ;; bounded regex candidate match
              maybe-index
              (find-match-candidate-index-in-content
@@ -705,7 +736,7 @@
             (empty? remain-targets))
       out
       (let [content (first remain-content)
-            maybe-matches 
+            maybe-matches
             (find-content-matches-by-tokenization
              content
              remain-targets
