@@ -256,6 +256,14 @@
              out)))))))
 
 ;; TODO: extract the link struct into external schema
+(defrecord LinkStructure
+    [link
+     protocol
+     resource-resolver-method
+     resource-resolver-path
+     content-resolvers
+     post-processors])
+
 (defn parse-link [link]
   (let [protocol-matcher
         (-> (str
@@ -295,28 +303,35 @@
                            nil)
                          maybe-qualifier)]
 
-    {:link link
-     :post-processors post-processors
-     :protocol protocol
-     :resource-resolver-path (if (@$in-memory-buffer-types
-                                  protocol)
-                               nil
-                               (-> path
-                                   (clean-path)
-                                   (js/decodeURI)
-                                   (str)))
-     :resource-resolver-method (cond (get @$known-resource-resolver-mapping protocol)
-                                     (@$known-resource-resolver-mapping protocol)
+    (LinkStructure.
+     link
+     protocol
+     ;; resource-resolver-method
+     (cond (get @$known-resource-resolver-mapping protocol)
+           (@$known-resource-resolver-mapping protocol)
 
-                                     (re-find #"\*" path)
-                                     :glob-name
+           (re-find #"\*" path)
+           :glob-name
 
-                                     (= :git protocol)
-                                     protocol
+           (= :git protocol)
+           protocol
 
-                                     :else
-                                     :exact-name)
-     :content-resolvers (or maybe-resolvers [{:type :whole-file}])}))
+           :else
+           :exact-name)
+
+     ;; resource-resolver-path
+     (if (@$in-memory-buffer-types
+          protocol)
+       nil
+       (-> path
+           (clean-path)
+           (js/decodeURI)
+           (str)))
+
+     ;; content-resolvers
+     (or maybe-resolvers [{:type :whole-file}])
+
+     post-processors)))
 
 (defn get-resource-match-async
   [candidate-seq-loader-async
