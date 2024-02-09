@@ -20,7 +20,7 @@
 
 (def $XCL-SERVER-RESOURCE-BASE-DIR
   (path-join
-   (.cwd js/process) ".."))
+   (.cwd js/process)))
 
 (defn get-local-resource-path
   [file-name]
@@ -93,8 +93,8 @@
     (signal-test-done!)))
 
 (defn git-direct-content-loader-test []
-  (let [path-in-repo "xcl/src/calibre.sql"
-        commit-oid "7f7b9c5d009a376036f1bba0ab2ef9e1966cbc57"
+  (let [path-in-repo "src/calibre.sql"
+        commit-oid "a5bee82595269ad8d14fc4fdc5e80d62cf71e421"
         expected-content (-> $XCL-SERVER-RESOURCE-BASE-DIR
                              (path-join path-in-repo)
                              (slurp))]
@@ -115,7 +115,7 @@
 (defn git-resolved-content-loader-test []
   (let [git-href
         (str "git:" $XCL-SERVER-RESOURCE-BASE-DIR
-             "/blob/e12ac284de45e07f58698f11472b10569d574130/xcl/README.org::*example usage")
+             "/blob/3fa84e47e7f3c9fa38de1c531586a2b213e63aeb/README.org::*example usage")
         spec (sc/parse-link git-href)]
     (load-local-resource
      spec

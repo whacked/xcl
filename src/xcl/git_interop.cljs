@@ -102,6 +102,11 @@
                (-> (git-content-object-to-string retrieved-object)
                    (fn-on-success)))
              (fn [error]
+               (js/console.error
+                (str "git readObject failed:\n"
+                     "repo-dir: " repo-dir "\n"
+                     "path-in-repo: " path-in-repo "\n"
+                     "commit-oid: " commit-oid "\n"))
                (js/console.error error)))))
 
 ;; WARN: GitResourceAddress overlaps its :content-resolvers with the
@@ -116,10 +121,10 @@
                                     on-resolved
                                     & [on-failed]]
   {:pre [(instance? GitResourceAddress GRA)]}
-  
+
   (let [env-resolved-dir (get-environment-substituted-path
                           repo-dir)]
-    
+
     (-> (.log git (clj->js (assoc $base-git-param
                                   :dir env-resolved-dir)))
         (.catch (fn [error]
