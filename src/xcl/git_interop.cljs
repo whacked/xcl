@@ -37,23 +37,6 @@
    (when resolver-string
      (str "::" resolver-string))))
 
-(defrecord GitResourceAddress
-    [repo-name oid path content-resolvers])
-
-;; subsumed completely by parse-git-protocol-blob-path?
-(defn parse-git-resource-address [git-resource-address]
-  (comment
-    (parse-git-resource-address "./blob/eb64c0e82c7c/README.org::*also see"))
-  (when-let [[full-match
-              repo-name
-              oid-hash
-              path-in-repo
-              content-resolvers]
-             (re-find #"([^/]+)/blob/([a-fA-F0-9]+)/([^:?]+)(.*)"
-                      git-resource-address)]
-    (GitResourceAddress.
-     repo-name oid-hash path-in-repo content-resolvers)))
-
 (defn parse-git-protocol-blob-path [git-protocol-path]
   (comment
     (parse-git-protocol-blob-path
