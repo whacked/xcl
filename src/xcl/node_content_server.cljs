@@ -197,6 +197,7 @@
                                            (fn [err text]
                                              (resolve-content-and-return! text)))))))
 
+                        ;; WARN: possibly duplication with node-interop:load-local-resource
                         ("git")
                         (fn [directive callback]
                           (let [resource-spec (sc/parse-link directive)
@@ -208,8 +209,6 @@
                              gra
                              (fn [full-content]
                                (some->> (ci/resolve-content resource-spec full-content)
-                                        (assoc resource-spec :text)
-                                        (clj->js)
                                         (callback nil)))
                              (fn [_]
                                (some->> {:status "failed"}

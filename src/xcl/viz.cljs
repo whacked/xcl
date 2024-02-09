@@ -655,6 +655,19 @@
          [{:type :jq-record-locator
            :bound {:row-index 2 :record-key "Name"}}]]
 
+        ;; doesn't work without creating a webserver-side git loader;
+        ;; currently a design problem is $ExternalLoaders dispatches
+        ;; by file extension and not by protocol. need to fix that
+        ;; before browser-side git loading can work
+        ;; ["grab field from jsonl by row and key, jq lookup notation"
+        ;;  "git:$PWD/.git/blob/54d4f39515cb74a075a0d9201e10cbe344175723/public/test-dataset.jsonl?jq=.[2].Name"
+        ;;  "Charlie"
+        ;;  "$PWD/.git/blob/54d4f39515cb74a075a0d9201e10cbe344175723/public/test-dataset.jsonl"
+        ;;  :git
+        ;;  nil
+        ;;  [{:type :jq-record-locator
+        ;;    :bound {:row-index 2 :record-key "Name"}}]]
+
         ["raw org text"
          "<<org-text>>::*b-heading"
          "* b-heading  :tag:tiger:\n\n  my text in the b heading"

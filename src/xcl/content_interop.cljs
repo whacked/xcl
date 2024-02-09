@@ -1,6 +1,13 @@
 (ns xcl.content-interop
-  (:require [xcl.common :refer [re-pos]]
+  (:require [xcl.common :refer [re-pos get-file-extension]]
+            [xcl.xsv-interop :as xsv]
+            [xcl.definitions :refer
+             [LinkStructure GitResourceAddress]]
             [xcl.external :as ext]))
+
+
+;; WARNING: no provision for windows
+(def $DIRECTORY-SEPARATOR "/")
 
 (defn log [& ss]
   (apply js/console.log ss))
@@ -93,13 +100,40 @@
                            buffer
                            out)))))))))
 
+;;; RECORD RESOLVERS
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; jq-style record resolver ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
+(defn query-by-jq-record-locator
+  [records bound-spec]
+  (let [{:keys [row-index record-key]} bound-spec]
+    (some-> records
+            (nth row-index)
+            (get record-key))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; excel-a1 record resolver ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
+(defn query-by-excel-a1-locator
+  [rows bound-spec]
+  (let [{:keys [row-number col-number]} bound-spec]
+    (-> rows
+        (nth (dec row-number))
+        (nth (dec col-number)))))
+
+
 ;; NOTE: consider updating this; these are plain-text resolvers,
 ;;       i.e. assumed to work within a fully-loaded blob of text.
 ;;       so these are incompatible with async resource loaders
 (def $resolver
-  (atom {:whole-file (fn [_ content] content)
-         :line-range (fn [spec content]
-                       (let [{:keys [beg end]} (:bound spec)
+  ;; maps from
+  ;; <keyword> resolver-identifier -> [resolver-spec string-content full-spec] -> string
+  (atom {:whole-file (fn [_ content _] content)
+         :line-range (fn [resolver-spec content _]
+                       (let [{:keys [beg end]} (:bound resolver-spec)
                              begin-index (max 0 (if beg (dec beg) 0))
                              lines (->> (clojure.string/split-lines content)
                                         (drop begin-index))]
@@ -109,14 +143,14 @@
                                       lines))
                               (interpose "\n")
                               (apply str))))
-         :char-range (fn [spec content]
-                       (let [{:keys [beg end]} (:bound spec)]
+         :char-range (fn [resolver-spec content _]
+                       (let [{:keys [beg end]} (:bound resolver-spec)]
                          (subs content beg
                                (or end (count content)))))
-         :percent-range (fn [spec content]
+         :percent-range (fn [resolver-spec content _]
                           (let [lines (clojure.string/split-lines content)
                                 n-lines (count lines)
-                                {:keys [beg end]} (:bound spec)
+                                {:keys [beg end]} (:bound resolver-spec)
                                 beg-index (->> (* 0.01 beg n-lines)
                                                (Math/round)
                                                (max 0))
@@ -127,10 +161,10 @@
                                  (drop beg-index)
                                  (interpose "\n")
                                  (apply str))))
-         :token-bound (fn [spec content]
+         :token-bound (fn [resolver-spec content _]
                         (let [{:keys [token-beg
                                       token-end]}
-                              (:bound spec)
+                              (:bound resolver-spec)
                               lower-content (clojure.string/lower-case
                                              content)
 
@@ -154,21 +188,20 @@
                                                (re-pos (subs lower-content maybe-begin-index))
                                                (keys)
                                                (first)
-                                               (+ maybe-begin-index))
-                                       ]
+                                               (+ maybe-begin-index))]
                               (subs content
                                     maybe-begin-index
                                     (+ maybe-end-index (count token-end)))))))
 
-         :line-with-match (fn [spec content]
+         :line-with-match (fn [resolver-spec content _]
                             (find-first-matching-string-element
-                             spec (clojure.string/split-lines content)))
+                             resolver-spec (clojure.string/split-lines content)))
 
-         :paragraph-with-match (fn [spec content]
+         :paragraph-with-match (fn [resolver-spec content _]
                                  (find-first-matching-string-element
-                                  spec (clojure.string/split content #"[\r\t ]*\n[\r\t ]*\n[\r\t ]*")))
-         :org-heading (fn [spec content]
-                        (let [target-heading (-> spec (get-in [:bound :heading]))
+                                  resolver-spec (clojure.string/split content #"[\r\t ]*\n[\r\t ]*\n[\r\t ]*")))
+         :org-heading (fn [resolver-spec content _]
+                        (let [target-heading (-> resolver-spec (get-in [:bound :heading]))
                               org-heading-positions (get-org-heading-positions content)]
                           (when-not (empty? org-heading-positions)
                             (loop [remain (sort (keys org-heading-positions))
@@ -198,8 +231,8 @@
                                       (recur (rest remain) (count stars) index end)
                                       (recur (rest remain) match-level beg end)))))))))
          :org-section-with-match
-         (fn [spec content]
-           (let [match-pattern (-> spec
+         (fn [resolver-spec content _]
+           (let [match-pattern (-> resolver-spec
                                    (get-in [:bound :query-string])
                                    (clojure.string/lower-case)
                                    (clojure.string/replace #"\+" "\\s+.*?")
@@ -231,8 +264,8 @@
                                   index
                                   end-index))))))))))
          :org-node-id
-         (fn [spec content]
-           (let [target-custom-id (-> spec
+         (fn [resolver-spec content _]
+           (let [target-custom-id (-> resolver-spec
                                       (get-in [:bound :id])
                                       (clojure.string/lower-case))
                  org-heading-positions (get-org-heading-positions
@@ -251,7 +284,39 @@
                           (get-in drawer-data
                                   [:PROPERTIES :CUSTOM_ID]))
                      section-text
-                     (recur (rest remain))))))))}))
+                     (recur (rest remain))))))))
+
+         :excel-a1
+         (fn [resolver-spec content full-spec]
+           (let [resource-resolver-path (:resource-resolver-path full-spec)
+                 delimiter (-> resource-resolver-path
+                               (xsv/get-delimiter-from-file-extension))
+                 bound-spec (:bound resolver-spec)]
+
+             (-> content
+                 (xsv/parse-xsv delimiter false)
+                 (query-by-excel-a1-locator bound-spec))))
+
+         :jq-record-locator
+         (fn [resolver-spec content full-spec]
+           ;; UGLY! what's a better way to unify the path lookup/dispatch?
+           ;;       note that these resolvers can be called after a "plain" resource resolution (LinkStructure)
+           ;;       and also a git protocol resolution (GitResourceAddress)
+           (let [resource-resolver-path (:resource-resolver-path full-spec)
+                 bound-spec (:bound resolver-spec)]
+
+             (case (get-file-extension resource-resolver-path)
+               ("csv" "tsv")
+               (let [delimiter (-> resource-resolver-path
+                                   (xsv/get-delimiter-from-file-extension))]
+                 (-> content
+                     (xsv/parse-xsv delimiter true)
+                     (query-by-jq-record-locator bound-spec)))
+
+               "jsonl"
+               (-> content
+                   (ext/read-jsonl)
+                   (query-by-jq-record-locator bound-spec)))))}))
 
 (defn get-resolver [resolver-spec]
   (if-let [registered-resolver (@$resolver
@@ -261,37 +326,13 @@
       (warn "UNKNOWN RESOLVER"
             (pr-str (:type resolver-spec))
             " in "
-            (pr-str resolver-spec))
+            (pr-str resolver-spec)
+            "\nsupported resolvers:"
+            (->> (keys @$resolver)
+                 (map (fn [s] (str "\n- " s)))
+                 (apply str)))
       (@$resolver :whole-file))))
 
-
-;;; RECORD RESOLVERS
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; jq-style record resolver ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
-(defn query-by-jq-record-locator
-  [records bound-spec]
-  (let [{:keys [row-index record-key]} bound-spec]
-    (some-> records
-            (nth row-index)
-            (get record-key))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; excel-a1 record resolver ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
-(defn query-by-excel-a1-locator
-  [rows bound-spec]
-  (let [{:keys [row-number col-number]} bound-spec]
-    (-> rows
-        (nth (dec row-number))
-        (nth (dec col-number)))))
-
-
-;; WARNING: no provision for windows
-(def $DIRECTORY-SEPARATOR "/")
 
 (def $known-post-processors
   (atom {"rewrite-relative-paths"
@@ -317,17 +358,19 @@
                   (apply str)
                   (replace))))}))
 
-(defn resolve-content [resolved-spec content]
+(defn resolve-content [resolved-full-spec content]
+  {:pre [(instance? LinkStructure resolved-full-spec)]}
   (when content
     (let [final-resolver-spec
-          (->> resolved-spec
+          (->> resolved-full-spec
                (:content-resolvers)
                (last))
 
           resolver (get-resolver final-resolver-spec)]
+
       (loop [remaining-post-processors
-             (:post-processors resolved-spec)
-             out (resolver final-resolver-spec content)]
+             (:post-processors resolved-full-spec)
+             out (resolver final-resolver-spec content resolved-full-spec)]
         (if (empty? remaining-post-processors)
           out
           (let [post-processor-name (first remaining-post-processors)
@@ -340,7 +383,7 @@
                                                 (keys @$known-post-processors)))
                                      identity))]
             (recur (rest remaining-post-processors)
-                   (post-processor out resolved-spec))))))))
+                   (post-processor out resolved-full-spec))))))))
 
 (def Node-TEXT_NODE (atom 3))
 

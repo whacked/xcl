@@ -1,5 +1,6 @@
 (ns xcl.core
   (:require [cemerick.url :refer [url url-encode url-decode]]
+            [xcl.definitions :refer [LinkStructure]]
             [xcl.content-interop :as ci]
             [xcl.common :refer [re-pos conj-if-non-nil
                                 get-file-extension]]))
@@ -255,15 +256,7 @@
                     :type range-type})
              out)))))))
 
-;; TODO: extract the link struct into external schema
-(defrecord LinkStructure
-    [link
-     protocol
-     resource-resolver-method
-     resource-resolver-path
-     content-resolvers
-     post-processors])
-
+;; TODO: now we have a defrecord; should extract into higher schema?
 (defn parse-link [link]
   (let [protocol-matcher
         (-> (str
@@ -343,16 +336,19 @@
   (let [resolved (parse-link link)
         resource-resolver-path (:resource-resolver-path resolved)
         resource-resolver-method (:resource-resolver-method resolved)
+
+        -exact-name-matcher (fn [matching-resources]
+                              (when-let [match (->> matching-resources
+                                                    (filter
+                                                     (partial = resource-resolver-path))
+                                                    (first))]
+                                (callback-on-received-match
+                                 (assoc resolved
+                                        :resource-resolver-path match))))
+
         content-matcher-async
         (case resource-resolver-method
-          :exact-name (fn [matching-resources]
-                        (when-let [match (->> matching-resources
-                                              (filter
-                                               (partial = resource-resolver-path))
-                                              (first))]
-                          (callback-on-received-match
-                           (assoc resolved
-                                  :resource-resolver-path match))))
+          :exact-name -exact-name-matcher
 
           :glob-name (fn [matching-resources]
                        (let [file-pattern (some-> resource-resolver-path
@@ -394,9 +390,11 @@
                                                :resource-resolver-path match-name)))
                                  (maybe-load-content-async!))))
 
-          (fn [matching-resources]
-            (js/console.error (str "ERROR: unhandled resolver: "
-                                   resource-resolver-method))))]
+          (do
+            (js/console.warn (str "ERROR: unhandled resolver: "
+                                  resource-resolver-method "; falling back to :exact-name"))
+            -exact-name-matcher))]
+
     (candidate-seq-loader-async
      resource-resolver-path
      (fn [matching-resources]

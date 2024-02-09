@@ -184,14 +184,8 @@
                     (:resource-resolver-path resource-address))]
      (if-not file-name
        (js/console.warn (str "NO SUCH FILE: " file-name))
-       (when-let [bound-spec
-                  (-> (get-in resource-address [:content-resolvers])
-                      (first)
-                      (:bound))]
-         (some-> (slurp-file file-name)
-                 (ext/read-jsonl)
-                 (ci/query-by-jq-record-locator bound-spec)
-                 (callback)))))))
+       (-> (ci/resolve-content resource-address (slurp-file file-name))
+           (callback))))))
 
 ;;;;;;;;;;;;;;;;;;;;;
 ;; calibre, zotero ;;
@@ -222,7 +216,11 @@
                    ;; does not handle. consider streamlining this logic.
                    (str "git:" (:resource-resolver-path spec)))]
 
-          (git/resolve-git-resource-address gra on-loaded))
+          (git/resolve-git-resource-address
+           gra
+           (fn [git-content]
+             (-> (ci/resolve-content spec git-content)
+                 (on-loaded)))))
 
         :else ;; assume filesystem based loader
         (-> spec
@@ -269,12 +267,8 @@
            delimiter (xsv/get-delimiter-from-file-extension file-name)]
        (if-not file-name
          (js/console.warn (str "NO SUCH FILE: " file-name))
-         (when-let [{:keys [bound type]}
-                    (-> (get-in resource-address [:content-resolvers])
-                        (first))]
-           (let [xsv-string (slurp-file file-name)]
-             (xsv/resolve-xsv-string
-              xsv-string resource-address callback))))))))
+         (-> (ci/resolve-content resource-address (slurp-file file-name))
+             (callback)))))))
 
 (comment
   ;; example use

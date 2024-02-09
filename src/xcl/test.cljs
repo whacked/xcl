@@ -35,7 +35,9 @@
         (let [gra (git/parse-git-protocol-blob-path (:link spec))]
           (git/resolve-git-resource-address
            gra
-           on-loaded))
+           (fn [git-content]
+             (-> (ci/resolve-content spec git-content)
+                 (on-loaded)))))
 
         :else ;; assume filesystem based loader
         (-> spec
@@ -61,7 +63,7 @@
                       ;; this works under the assumption that the test process is being invoked via
                       ;; `node build/test.js`; at run-time, it still resolves to starting from the
                       ;; root directory of the `transclusion-minor-mode` repo
-                      "file:xcl/../xcl/README.org::*example usage")
+                      "file:src/../README.org::*example usage")
         resolved-abspath-content
         (->> (:resource-resolver-path abspath-spec)
              (get-local-resource-path)
@@ -112,7 +114,7 @@
            (println "=== RECEIVED ===" text)))
        (signal-test-done!)))))
 
-(defn git-resolved-content-loader-test []
+(defn git-resolved-content-loader-test-org-style []
   (let [git-href
         (str "git:" $XCL-SERVER-RESOURCE-BASE-DIR
              "/blob/3fa84e47e7f3c9fa38de1c531586a2b213e63aeb/README.org::*example usage")
@@ -124,11 +126,41 @@
          (if (clojure.string/starts-with?
               resolved-content
               "* example usage")
-           (log-green "[GIT] resolved content loader OK")
+           (log-green "[GIT] org-style resolved content loader OK")
            (do
-             (log-red "[GIT] resolved content loader FAIL")
+             (log-red "[GIT] org-style resolved content loader FAIL")
              (println "=== RECEIVED  ===" resolved-content)))
          (signal-test-done!))))))
+
+(defn git-resolved-content-loader-test-jsonl-jq-query-style []
+  (let [git-href
+        (str "git:" $XCL-SERVER-RESOURCE-BASE-DIR
+             "/blob/ec2b3941a27a627cffc09af5df66edfe94720202/public/test-dataset.jsonl?jq=.[4].Team")
+        spec (sc/parse-link git-href)]
+    (load-local-resource
+     spec
+     (fn [resolved-content]
+       (if (= resolved-content "Red")
+         (log-green "[GIT] jsonl + jq-style resolved content loader OK")
+         (do
+           (log-red (str "[GIT] jsonl + jq-style resolved content loader FAIL (received: " resolved-content ")"))
+           (println "=== RECEIVED  ===" resolved-content)))
+       (signal-test-done!)))))
+
+(defn git-resolved-content-loader-test-tsv-jq-query-style []
+  (let [git-href
+        (str "git:" $XCL-SERVER-RESOURCE-BASE-DIR
+             "/blob/ec2b3941a27a627cffc09af5df66edfe94720202/public/test-dataset.tsv?jq=.[4].Team")
+        spec (sc/parse-link git-href)]
+    (load-local-resource
+     spec
+     (fn [resolved-content]
+       (if (= resolved-content "Red")
+         (log-green "[GIT] tsv + jq-style resolved content loader OK")
+         (do
+           (log-red (str "[GIT] tsv + jq-style resolved content loader FAIL (received: " resolved-content ")"))
+           (println "=== RECEIVED  ===" resolved-content)))
+       (signal-test-done!)))))
 
 (defn zotero-test-pdf []
   (zotero/load-text-from-file
@@ -208,9 +240,9 @@
     (external-loader
      resource-spec
      (fn [text]
-       (if (= text "88")
+       (if (= text "Diana")
          (log-green "[CSV OK]")
-         (log-red "[CSV BAD]"))
+         (log-red (str "[CSV BAD] received: " text)))
        (js/console.log (str "    " (pr-str resource-spec) "\n"
                             "    " text
                             "\n\n"))
@@ -270,7 +302,7 @@
 
   (add-node-test!
    (fn default-file []
-     (let [directive "transcluding-org-elements.org"]
+     (let [directive "public/transcluding-org-elements.org"]
        (load-from-directive directive)
        (signal-test-done!))))
 
@@ -282,7 +314,7 @@
 
   (add-node-test!
    (fn fs-file-with-line-range []
-     (let [directive "file:transcluding-org-elements.org::153,185"]
+     (let [directive "file:public/transcluding-org-elements.org::153,185"]
        (load-from-directive directive)
        (signal-test-done!))))
 
@@ -312,7 +344,7 @@
 
   (add-node-test!
    (fn xcl-yaml-jsonpath []
-     (let [directive "xcl:xcl/public/test-highlight-file.yml?jsonpath=$.highlights[2].highlightText"]
+     (let [directive "xcl:public/test-highlight-file.yml?jsonpath=$.highlights[2].highlightText"]
        (load-from-directive directive)
        (signal-test-done!))))
 
@@ -335,7 +367,11 @@
 
   (add-node-test! git-direct-content-loader-test)
 
-  (add-node-test! git-resolved-content-loader-test)
+  (add-node-test! git-resolved-content-loader-test-org-style)
+
+  (add-node-test! git-resolved-content-loader-test-jsonl-jq-query-style)
+
+  (add-node-test! git-resolved-content-loader-test-tsv-jq-query-style)
 
   (add-node-test! fs-abspath-and-relpath-file-loader)
 

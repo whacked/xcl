@@ -1,5 +1,6 @@
 (ns xcl.git-interop
   (:require [xcl.common :refer [get-file-extension]]
+            [xcl.definitions :refer [LinkStructure GitResourceAddress]]
             [xcl.core :as sc]
             [xcl.content-interop :as ci]
             ["fs" :as fs]
@@ -69,6 +70,7 @@
                                   repo-path)
                                 (get-environment-substituted-path))]
       (GitResourceAddress.
+       git-protocol-path
        cleaned-repo-path
        commit-oid
        (or path-in-repo
@@ -96,7 +98,8 @@
 ;;       general xcl link structure; this is why we can send it to
 ;;       ci/resolve-content, but this should be more cleanly and
 ;;       strictly combined with the more general xcl struct
-(defn resolve-git-resource-address [{commit-oid :oid
+(defn resolve-git-resource-address [{link :link
+                                     commit-oid :oid
                                      repo-dir :repo-name
                                      path-in-repo :path
                                      resolvers :content-resolvers
@@ -105,7 +108,14 @@
                                     & [on-failed]]
   {:pre [(instance? GitResourceAddress GRA)]}
 
-  (let [env-resolved-dir (get-environment-substituted-path
+  (let [link-spec (LinkStructure.
+                   link
+                   :git
+                   :exact-name
+                   path-in-repo
+                   resolvers
+                   nil)
+        env-resolved-dir (get-environment-substituted-path
                           repo-dir)]
 
     (-> (.log git (clj->js (assoc $base-git-param
@@ -136,6 +146,4 @@
                           env-resolved-dir
                           path-in-repo
                           (:oid commit-clj-object)
-                          (fn [content]
-                            (-> (ci/resolve-content GRA content)
-                                (on-resolved)))))))))))))
+                          on-resolved))))))))))
