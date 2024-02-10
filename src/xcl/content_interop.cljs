@@ -108,10 +108,29 @@
 ;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
 (defn query-by-jq-record-locator
   [records bound-spec]
-  (let [{:keys [row-index record-key]} bound-spec]
-    (some-> records
-            (nth row-index)
-            (get record-key))))
+
+  (comment
+    (let [records [{:name "first" :i 0 "color" "red"}
+                   {:name "second" :i 1 "color" "green"}
+                   {:name "third" :i 2 "color" "blue"}
+                   {:name "fourth" :i 3 "color" "yellow"}]]
+      (->> [[{:row-index 2 :record-key "color"} "blue"]
+            [{:row-index 5 :record-key "color"} nil]
+            [{:row-index -2 :record-key "color"} "blue"]]
+           (map-indexed (fn [i [bound-spec expect]]
+                          [i (= expect (query-by-jq-record-locator records bound-spec))])))))
+
+  (let [{:keys [row-index record-key]} bound-spec
+        nrows (count records)
+        effective-row-index (if (< row-index 0)
+                              (+ nrows row-index)
+                              row-index)]
+    effective-row-index
+    (if-not (< effective-row-index nrows)
+      nil
+      (some-> records
+              (nth effective-row-index)
+              (get record-key)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; excel-a1 record resolver ;;
@@ -119,10 +138,30 @@
 ;; TODO: refactor this wrt all the ci/$ and sc/$ atoms
 (defn query-by-excel-a1-locator
   [rows bound-spec]
-  (let [{:keys [row-number col-number]} bound-spec]
-    (-> rows
-        (nth (dec row-number))
-        (nth (dec col-number)))))
+  (comment
+    (let [records [["first" 0 "red"]
+                   ["second" 1 "green"]
+                   ["third" 2 "blue"]
+                   ["fourth" 3 "yellow"]]]
+      (->> [[{:row-number 3 :col-number 3} "blue"]
+            [{:row-number 2 :col-number 9} nil]
+            [{:row-number 5 :col-number 1} nil]]
+           (map-indexed (fn [i [bound-spec expect]]
+                          [i (= expect (query-by-excel-a1-locator
+                                        records bound-spec))])))))
+  (if (empty? rows)
+    nil
+    (let [{:keys [row-number col-number]} bound-spec
+          nrows (count rows)
+          ncols (count (first rows))
+          row-index (dec row-number)
+          col-index (dec col-number)]
+      (if-not (and (< row-index nrows)
+                   (< col-index ncols))
+        nil
+        (some-> rows
+                (nth row-index)
+                (nth col-index))))))
 
 
 ;; NOTE: consider updating this; these are plain-text resolvers,
